@@ -36,3 +36,16 @@ AI-agent robot fund for the AddNode Architecture Group challenge. A system of au
 - **Alpaca Paper Trading** (alpaca.markets) -- free sandbox, REST API
 - Market: NYSE / NASDAQ
 - Starting capital: $100,000 USD
+
+## Tech Stack
+
+Clojure + Biff framework (XTDB bitemporal DB, HTMX dashboard) · Podman container on Mac mini (24/7) · Anthropic Claude for LLM judgment · Alpaca REST API via `clj-http`.
+
+## Commands
+
+_To be filled in once `deps.edn` and `Containerfile` exist._
+
+## Documentation
+
+- **`docs/architecture.md`** -- living system design (agent roles, data flow, observability)
+- **`docs/adr/`** -- Architecture Decision Records (frozen decisions with rationale)
