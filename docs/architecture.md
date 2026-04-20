@@ -110,7 +110,10 @@ The core challenge requirement is to show "how agents reasoned and what decision
 ## 7. Deployment Topology
 
 - **Single uberjar** built from Clojure source + Biff framework.
-- **Podman container** wrapping the uberjar, exposing port 8080 (dashboard) and persisting XTDB state to a volume.
+- **Podman container** wrapping the uberjar, exposing port 8080 (dashboard). Container is stateless.
+- **Persistent state via host bind mounts:**
+  - XTDB data: host `~/fund/xtdb-data/` → container `/data/xtdb/`
+  - Structured logs: host `~/fund/logs/` → container `/data/logs/`
 - **Host:** Mac mini, running 24/7, auto-starts the container on boot via `launchd` plist.
 - **External services:** Alpaca paper trading API, Anthropic API, one or more news APIs. Credentials via environment variables injected into the container.
-- **Backups:** XTDB volume snapshotted daily to the Mac mini's Time Machine drive.
+- **Backups:** `~/fund/` is under `/Users/`, so Time Machine picks it up automatically — no separate snapshot script needed. See [ADR 0004](./adr/0004-state-persistence-bind-mount.md).
