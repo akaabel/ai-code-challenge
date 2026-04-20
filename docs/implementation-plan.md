@@ -26,7 +26,7 @@ This document is **living** — we update it as we learn, reorder steps if somet
 
 ---
 
-## Step 1 — Biff skeleton boots `[ ]`
+## Step 1 — Biff skeleton boots `[x]`
 
 **Goal:** Generate a Biff project and get the default welcome page responding on `localhost:8080`.
 
@@ -327,4 +327,5 @@ Not yet detailed — will plan once we see how the trading week goes. Likely sha
 
 Newest on top.
 
+- 2026-04-20 — Step 1 done: Biff v1.9.1 skeleton boots on :8080
 - 2026-04-20 — Plan created
