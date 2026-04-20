@@ -10,6 +10,8 @@ clj -M:dev dev
 
 Then open <http://localhost:8080>.
 
+A few harmless startup warnings are expected — see [`docs/known-warnings.md`](./docs/known-warnings.md).
+
 ## Where to look
 
 - [`CLAUDE.md`](./CLAUDE.md) — project overview, dates, constraints
