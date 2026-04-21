@@ -59,7 +59,7 @@ This document is **living** — we update it as we learn, reorder steps if somet
 
 ---
 
-## Step 3 — Entity schemas `[~]`
+## Step 3 — Entity schemas `[x]`
 
 **Goal:** Define the shape of every entity the system will persist.
 
@@ -347,6 +347,7 @@ Not yet detailed — will plan once we see how the trading week goes. Likely sha
 
 Newest on top.
 
+- 2026-04-21 — Step 3 done: entity schemas (candidate, news-report, analysis, trade-proposal, order, fill, llm-call) + validate! helper
 - 2026-04-21 — Step 2 done: dev/user.clj with save!, q, and as-of comment block
 - 2026-04-20 — Step 1 done: Biff v1.9.1 skeleton boots on :8080
 - 2026-04-20 — Plan created
