@@ -41,8 +41,7 @@
  :biff.tasks/on-soft-deploy         "\"(com.robotfund/on-save @com.robotfund/system)\""
  :biff.tasks/generate-assets-fn     com.robotfund/generate-assets!
  :biff.tasks/css-output             "target/resources/public/css/main.css"
- :biff.tasks/deploy-untracked-files [#ref [:biff.tasks/css-output]
-                                     "config.env"]
+ :biff.tasks/deploy-untracked-files [#ref [:biff.tasks/css-output]]
 
  ;; `clj -M:dev prod-dev` will run the soft-deploy task whenever files in these directories are changed.
  :biff.tasks/watch-dirs             ["src" "dev" "resources" "test"]

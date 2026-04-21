@@ -74,7 +74,7 @@ This document is **living** — we update it as we learn, reorder steps if somet
 
 ---
 
-## Step 3.5 — Migrate secrets to `~/fund/.env` (ADR 0005) `[ ]`
+## Step 3.5 — Migrate secrets to `~/fund/.env` (ADR 0005) `[x]`
 
 **Why here:** Step 4 adds the first real API key (Alpaca). Per ADR 0005 and user request on 2026-04-21, do the migration *before* that so no real API key ever lives inside the git tree.
 
@@ -347,6 +347,7 @@ Not yet detailed — will plan once we see how the trading week goes. Likely sha
 
 Newest on top.
 
+- 2026-04-21 — Step 3.5 done: secrets migrated to ~/fund/.env; ops/dev.sh replaces clj -M:dev dev
 - 2026-04-21 — Step 3 done: entity schemas (candidate, news-report, analysis, trade-proposal, order, fill, llm-call) + validate! helper
 - 2026-04-21 — Step 2 done: dev/user.clj with save!, q, and as-of comment block
 - 2026-04-20 — Step 1 done: Biff v1.9.1 skeleton boots on :8080

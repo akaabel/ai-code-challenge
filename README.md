@@ -4,8 +4,11 @@ AI-agent robot fund for the AddNode Architecture Group Agent AI Challenge 2026.
 
 ## Quick start
 
+1. Create `~/fund/.env` from [`resources/config.template.env`](./resources/config.template.env) and populate the secrets.
+2. Run the app:
+
 ```sh
-clj -M:dev dev
+./ops/dev.sh
 ```
 
 Then open <http://localhost:8080>.
