@@ -7,9 +7,10 @@ This document is **living** — we update it as we learn, reorder steps if somet
 ## How we work through this
 
 1. Before starting a step, glance at the **What you'll be able to test** box.
-2. I implement the step; the commit message matches `Step N: <short title>`.
-3. You pull, run the test, tell me if it's good or what needs adjusting.
-4. On green, we move to the next step.
+2. I implement the step; the commit message matches `Step N: <short title>`. Do not do the commit, I will do that myself.
+3. You should run the tests that you tell med to do in order to verify the implementation.
+4. You pull, run the test, tell me if it's good or what needs adjusting.
+5. On green, we move to the next step.
 
 ## Status legend
 

@@ -50,3 +50,6 @@ _To be filled in once `deps.edn` and `Containerfile` exist._
 - **`docs/implementation-plan.md`** -- step-by-step build plan; active work tracker. **Start here.**
 - **`docs/architecture.md`** -- living system design (agent roles, data flow, observability)
 - **`docs/adr/`** -- Architecture Decision Records (frozen decisions with rationale)
+
+## Claude Code
+- When done with a task, suggest a git commit message, but do not commit it. I will do that myself.
