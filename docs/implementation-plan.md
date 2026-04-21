@@ -59,7 +59,7 @@ This document is **living** — we update it as we learn, reorder steps if somet
 
 ---
 
-## Step 3 — Entity schemas `[ ]`
+## Step 3 — Entity schemas `[~]`
 
 **Goal:** Define the shape of every entity the system will persist.
 

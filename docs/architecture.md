@@ -107,7 +107,108 @@ The core challenge requirement is to show "how agents reasoned and what decision
 - Bitemporal queries: "As of 14:32 yesterday, what analyses existed for AAPL?" → single XTDB `as-of` query.
 - Dashboard timeline: derived from the transaction log, renders agent activity as a scrollable feed ("16:32 — News agent flags Apple report → Analyst rates 7/10 → Risk approves → Executor buys 50 AAPL").
 
-## 7. Deployment Topology
+## 7. Entity Schemas
+
+All entities are persisted in XTDB and validated via `malli`. Schemas live in `src/com/robotfund/schema.clj`. Every entity's `:xt/id` is a UUID and links the pipeline chain together.
+
+### `:llm-call`
+Every LLM API call, without exception. The audit trail the challenge rewards.
+
+| Field | Type | Notes |
+|---|---|---|
+| `:xt/id` | uuid | |
+| `:llm-call/model` | string | e.g. `"claude-haiku-4-5-20251001"` |
+| `:llm-call/prompt` | string | Full prompt sent |
+| `:llm-call/response` | string | Raw LLM response |
+| `:llm-call/input-tokens` | pos-int | |
+| `:llm-call/output-tokens` | pos-int | |
+| `:llm-call/latency-ms` | pos-int | Wall-clock ms |
+| `:llm-call/called-at` | inst | |
+
+### `:candidate`
+Stock flagged by the Market Scanner as worth investigating this cycle.
+
+| Field | Type | Notes |
+|---|---|---|
+| `:xt/id` | uuid | |
+| `:candidate/ticker` | string | NYSE/NASDAQ symbol |
+| `:candidate/scanned-at` | inst | |
+| `:candidate/trigger` | `:price-change` \| `:volume-spike` | Why it was flagged |
+| `:candidate/price-change-pct` | double? | Optional; set when trigger is `:price-change` |
+| `:candidate/volume-ratio` | double? | Optional; volume / 20-day avg |
+
+### `:news-report`
+News summary and sentiment score produced by the News/Sentiment agent.
+
+| Field | Type | Notes |
+|---|---|---|
+| `:xt/id` | uuid | |
+| `:news-report/candidate-id` | uuid | → `:candidate` |
+| `:news-report/ticker` | string | |
+| `:news-report/sentiment` | number | −1.0 (negative) → +1.0 (positive) |
+| `:news-report/summary` | string | LLM-generated prose summary |
+| `:news-report/headlines` | `[string]` | Source headlines fed to the LLM |
+| `:news-report/llm-call-id` | uuid | → `:llm-call` |
+| `:news-report/reported-at` | inst | |
+
+### `:analysis`
+Rating and recommendation produced by the Analyst agent.
+
+| Field | Type | Notes |
+|---|---|---|
+| `:xt/id` | uuid | |
+| `:analysis/candidate-id` | uuid | → `:candidate` |
+| `:analysis/news-report-id` | uuid | → `:news-report` |
+| `:analysis/ticker` | string | |
+| `:analysis/rating` | int 1–10 | 1 = avoid, 10 = strong conviction |
+| `:analysis/reasoning` | string | LLM free-form justification |
+| `:analysis/action` | `:buy` \| `:sell` \| `:hold` | |
+| `:analysis/llm-call-id` | uuid | → `:llm-call` |
+| `:analysis/analyzed-at` | inst | |
+
+### `:trade-proposal`
+Risk Manager's ruling on whether to act on an analysis.
+
+| Field | Type | Notes |
+|---|---|---|
+| `:xt/id` | uuid | |
+| `:trade-proposal/analysis-id` | uuid | → `:analysis` |
+| `:trade-proposal/ticker` | string | |
+| `:trade-proposal/action` | `:buy` \| `:sell` \| `:hold` | |
+| `:trade-proposal/quantity` | pos-int | Shares (may be resized from analysis) |
+| `:trade-proposal/decision` | `:approved` \| `:rejected` \| `:resized` | |
+| `:trade-proposal/reason` | string | Why it was approved/rejected/resized |
+| `:trade-proposal/proposed-at` | inst | |
+
+### `:order`
+Order placed on Alpaca paper trading.
+
+| Field | Type | Notes |
+|---|---|---|
+| `:xt/id` | uuid | |
+| `:order/proposal-id` | uuid | → `:trade-proposal` |
+| `:order/ticker` | string | |
+| `:order/side` | `:buy` \| `:sell` | |
+| `:order/quantity` | pos-int | |
+| `:order/alpaca-id` | string | Alpaca's own order UUID |
+| `:order/status` | `:pending` \| `:filled` \| `:cancelled` \| `:expired` | |
+| `:order/placed-at` | inst | |
+
+### `:fill`
+Confirmed execution of an order (full or partial).
+
+| Field | Type | Notes |
+|---|---|---|
+| `:xt/id` | uuid | |
+| `:fill/order-id` | uuid | → `:order` |
+| `:fill/ticker` | string | |
+| `:fill/quantity` | pos-int | Shares actually filled |
+| `:fill/price` | pos number | Average fill price |
+| `:fill/filled-at` | inst | |
+
+---
+
+## 8. Deployment Topology
 
 - **Single uberjar** built from Clojure source + Biff framework.
 - **Podman container** wrapping the uberjar, exposing port 8080 (dashboard). Container is stateless.
