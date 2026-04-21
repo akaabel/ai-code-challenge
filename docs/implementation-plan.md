@@ -43,7 +43,7 @@ This document is **living** — we update it as we learn, reorder steps if somet
 
 ---
 
-## Step 2 — XTDB round-trip from the REPL `[ ]`
+## Step 2 — XTDB round-trip from the REPL `[x]`
 
 **Goal:** Prove we can write and read documents.
 
@@ -346,5 +346,6 @@ Not yet detailed — will plan once we see how the trading week goes. Likely sha
 
 Newest on top.
 
+- 2026-04-21 — Step 2 done: dev/user.clj with save!, q, and as-of comment block
 - 2026-04-20 — Step 1 done: Biff v1.9.1 skeleton boots on :8080
 - 2026-04-20 — Plan created
