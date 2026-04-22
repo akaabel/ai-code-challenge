@@ -93,7 +93,7 @@ This document is **living** — we update it as we learn, reorder steps if somet
 
 ---
 
-## Step 4 — Alpaca client (read-only) `[ ]`
+## Step 4 — Alpaca client (read-only) `[x]`
 
 **Goal:** Talk to Alpaca paper trading from the REPL. No orders yet.
 
@@ -347,6 +347,7 @@ Not yet detailed — will plan once we see how the trading week goes. Likely sha
 
 Newest on top.
 
+- 2026-04-22 — Step 4 done: Alpaca client with get-account, get-positions, get-bars (data API on data.alpaca.markets)
 - 2026-04-21 — Step 3.5 done: secrets migrated to ~/fund/.env; ops/dev.sh replaces clj -M:dev dev
 - 2026-04-21 — Step 3 done: entity schemas (candidate, news-report, analysis, trade-proposal, order, fill, llm-call) + validate! helper
 - 2026-04-21 — Step 2 done: dev/user.clj with save!, q, and as-of comment block
