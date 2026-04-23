@@ -3,8 +3,8 @@
             [cheshire.core :as json]
             [xtdb.api :as xt]))
 
-(def fast-model    "gemini-2.5-flash")
-(def quality-model "gemini-2.5-pro")
+(def fast-model    "gemma-3-27b-it")
+(def quality-model "gemma-3-27b-it")
 
 (def ^:private base-url "https://generativelanguage.googleapis.com/v1beta")
 
