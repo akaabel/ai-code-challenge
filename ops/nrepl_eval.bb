@@ -5,7 +5,9 @@
 ;; CLI usage: bb ops/nrepl_eval.bb '<clojure expression>'
 
 (ns nrepl-eval
-  (:require [bencode.core :as b]))
+  (:require [bencode.core :as b]
+            [clojure.edn :as edn]
+            [clojure.pprint :as pp]))
 
 (defn- bytes->str [x]
   (if (bytes? x) (String. x) (str x)))
@@ -44,7 +46,11 @@
 (defn print-result [{:keys [vals err ex]}]
   (when ex  (println "EXCEPTION:" ex))
   (when err (println "ERROR:" err))
-  (doseq [v vals] (println v))
+  (doseq [v vals]
+    (try
+      (pp/pprint (edn/read-string v))
+      (catch Exception _
+        (println v))))
   (when (and (empty? vals) (nil? err) (nil? ex)) (println "nil")))
 
 ;; Only run as a CLI script when executed directly, not when required as a library.
