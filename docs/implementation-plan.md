@@ -8,9 +8,10 @@ This document is **living** — we update it as we learn, reorder steps if somet
 
 1. Before starting a step, glance at the **What you'll be able to test** box.
 2. I implement the step; the commit message matches `Step N: <short title>`. Do not do the commit, I will do that myself.
-3. You should run the tests that you tell med to do in order to verify the implementation.
-4. You pull, run the test, tell me if it's good or what needs adjusting.
-5. On green, we move to the next step.
+3. You start the app (`./ops/dev.sh`) if it isn't already running.
+4. I connect to the nREPL on `localhost:7888` via `bb` and run the tests myself.
+5. On green I mark the step done and suggest a commit message. On failure I fix and re-test.
+6. You commit and we move to the next step.
 
 ## Status legend
 
@@ -109,7 +110,7 @@ This document is **living** — we update it as we learn, reorder steps if somet
 
 ---
 
-## Step 5 — Anthropic client with `::llm-call` logging `[ ]`
+## Step 5 — Anthropic client with `::llm-call` logging `[x]`
 
 **Goal:** Ask Claude a question from the REPL and see the call persisted to XTDB.
 
@@ -347,6 +348,7 @@ Not yet detailed — will plan once we see how the trading week goes. Likely sha
 
 Newest on top.
 
+- 2026-04-22 — Step 5 done: Gemini LLM client with 429 retry, xt/await-tx, :llm-call logged to XTDB
 - 2026-04-22 — Step 4 done: Alpaca client with get-account, get-positions, get-bars (data API on data.alpaca.markets)
 - 2026-04-21 — Step 3.5 done: secrets migrated to ~/fund/.env; ops/dev.sh replaces clj -M:dev dev
 - 2026-04-21 — Step 3 done: entity schemas (candidate, news-report, analysis, trade-proposal, order, fill, llm-call) + validate! helper
