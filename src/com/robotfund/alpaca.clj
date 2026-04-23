@@ -65,6 +65,20 @@
                {:headers           (auth-headers)
                 :throw-exceptions  false}))
 
+(defn get-movers
+  "Returns top gainers and losers for US equities.
+   opts: :top (default 20, max 25).
+   Response: {:gainers [{:symbol :price :change :percent_change}] :losers [...]}"
+  [{:keys [top] :or {top 20}}]
+  (get* data-v1beta1 "/screener/stocks/movers" {:top top}))
+
+(defn get-most-actives
+  "Returns most actively traded US equities by volume.
+   opts: :top (default 20, max 25).
+   Response: {:most_actives [{:symbol :volume :trade_count}]}"
+  [{:keys [top] :or {top 20}}]
+  (get* data-v1beta1 "/screener/stocks/most-actives" {:top top}))
+
 (defn get-news
   "Fetches recent news articles for ticker from Alpaca.
    opts: :limit (default 10, max 50).

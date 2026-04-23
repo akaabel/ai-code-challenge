@@ -348,6 +348,7 @@ Not yet detailed — will plan once we see how the trading week goes. Likely sha
 
 Newest on top.
 
+- 2026-04-23 — Dynamic scanner: replaced static 10-ticker watchlist with Alpaca screener (movers + most-actives); min-price $5 filter eliminates warrants/penny stocks; fallback watchlist retained for when screener is unavailable
 - 2026-04-23 — Step 10 done: Executor places Alpaca market orders for approved proposals, polls fills (3s), reconciles/cancels stale pending orders; alpaca/place-order + get-order + cancel-order added; bb execute + bb pipeline tasks added
 - 2026-04-23 — Step 9 done: Risk Manager applies hard Clojure rules (max 10% position, 30% sector, 5 trades/day, min rating 7 to buy, max 3 to sell, no shorting), writes :trade-proposal; schema updated to make quantity optional on rejected proposals; bb risk + bb proposals tasks added
 - 2026-04-23 — Step 8 done: Analyst agent rates each candidate 1–10, recommends buy/sell/hold via Gemini, writes :analysis to XTDB; bb analyse + bb analyses tasks added
