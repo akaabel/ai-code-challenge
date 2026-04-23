@@ -74,6 +74,24 @@
                                 '[repl :refer [get-context]])
                        (executor/run-executor (get-context))"))}
 
+  sector-exposure
+  {:doc "Show current portfolio sector breakdown (market value + % of equity per sector bucket)"
+   :task (print-result
+          (nrepl-eval "(require '[com.robotfund.alpaca :as alpaca]
+                                '[com.robotfund.agents.risk :as risk])
+                       (let [account   (alpaca/get-account)
+                             positions (alpaca/get-positions)
+                             equity    (Double/parseDouble (str (:equity account)))
+                             by-sector (group-by #(get risk/sector-map (:symbol %) :other) positions)]
+                         (into (sorted-map)
+                               (map (fn [[sector pos]]
+                                      [sector
+                                       (let [mv (reduce + 0.0 (map #(Double/parseDouble (str (:market_value %))) pos))]
+                                         {:pct     (double (Math/round (* 100.0 (/ mv equity))))
+                                          :value   (long mv)
+                                          :tickers (mapv :symbol pos)})])
+                                    by-sector)))"))}
+
   pipeline
   {:doc "Run full pipeline: scan → news → analyse → risk → execute"
    :task (print-result

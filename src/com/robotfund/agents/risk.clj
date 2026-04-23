@@ -3,7 +3,7 @@
             [com.robotfund.schema :as schema]
             [xtdb.api :as xt]))
 
-(def ^:private sector-map
+(def sector-map
   {"AAPL"  :technology
    "MSFT"  :technology
    "NVDA"  :technology
