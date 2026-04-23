@@ -5,6 +5,7 @@
             [com.robotfund.home :as home]
             [com.robotfund.middleware :as mid]
             [com.robotfund.ui :as ui]
+            [com.robotfund.schedule :as schedule]
             [com.robotfund.worker :as worker]
             [com.robotfund.schema :as schema]
             [clojure.test :as test]
@@ -20,7 +21,8 @@
    (biff/authentication-module {})
    home/module
    schema/module
-   worker/module])
+   worker/module
+   schedule/module])
 
 (def routes [["" {:middleware [mid/wrap-site-defaults]}
               (keep :routes modules)]
