@@ -173,7 +173,7 @@ This document is **living** — we update it as we learn, reorder steps if somet
 
 ---
 
-## Step 9 — Risk Manager `[ ]`
+## Step 9 — Risk Manager `[x]`
 
 **Goal:** Apply hard rules; approve, resize, or reject proposals.
 
@@ -348,6 +348,7 @@ Not yet detailed — will plan once we see how the trading week goes. Likely sha
 
 Newest on top.
 
+- 2026-04-23 — Step 9 done: Risk Manager applies hard Clojure rules (max 10% position, 30% sector, 5 trades/day, min rating 7 to buy, max 3 to sell, no shorting), writes :trade-proposal; schema updated to make quantity optional on rejected proposals; bb risk + bb proposals tasks added
 - 2026-04-23 — Step 8 done: Analyst agent rates each candidate 1–10, recommends buy/sell/hold via Gemini, writes :analysis to XTDB; bb analyse + bb analyses tasks added
 - 2026-04-23 — Step 7 done: News agent fetches Alpaca news, scores sentiment via Gemini, writes :news-report linked to :candidate and :llm-call; llm/complete now returns {:text :llm-call-id}; retry covers 429+503
 - 2026-04-23 — Step 6 done: Scanner agent with 10-ticker watchlist, price-change >1.5% and volume-spike >2× triggers, candidates persisted to XTDB; bb.edn + ops/nrepl-eval.bb added for manual testing

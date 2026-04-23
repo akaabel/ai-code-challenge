@@ -78,14 +78,14 @@
    :trade-proposal/decision [:enum :approved :rejected :resized]
 
    :trade-proposal [:map {:closed true}
-                    [:xt/id                      :trade-proposal/id]
-                    [:trade-proposal/analysis-id :analysis/id]
-                    [:trade-proposal/ticker      :string]
-                    [:trade-proposal/action      :analysis/action]
-                    [:trade-proposal/quantity    pos-int?]
-                    [:trade-proposal/decision    :trade-proposal/decision]
-                    [:trade-proposal/reason      :string]
-                    [:trade-proposal/proposed-at inst?]]
+                    [:xt/id                                    :trade-proposal/id]
+                    [:trade-proposal/analysis-id               :analysis/id]
+                    [:trade-proposal/ticker                    :string]
+                    [:trade-proposal/action                    :analysis/action]
+                    [:trade-proposal/quantity {:optional true} pos-int?]
+                    [:trade-proposal/decision                  :trade-proposal/decision]
+                    [:trade-proposal/reason                    :string]
+                    [:trade-proposal/proposed-at               inst?]]
 
    ;; Executor
    :order/id     :uuid

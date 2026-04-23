@@ -45,4 +45,24 @@
                                                             :analysis/rating
                                                             :analysis/action
                                                             :analysis/reasoning])]
-                                           :where [[a :analysis/ticker]]}))"))}}}
+                                           :where [[a :analysis/ticker]]}))"))}
+
+  risk
+  {:doc "Run risk manager — applies hard rules, writes :trade-proposal (approved/resized/rejected) to XTDB"
+   :task (print-result
+          (nrepl-eval "(require '[com.robotfund.agents.risk :as risk]
+                                '[repl :refer [get-context]])
+                       (risk/run-risk (get-context))"))}
+
+  proposals
+  {:doc "Query XTDB — print all :trade-proposal entries (ticker, action, decision, reason)"
+   :task (print-result
+          (nrepl-eval "(require '[xtdb.api :as xt]
+                                '[repl :refer [get-context]])
+                       (mapv first (xt/q (xt/db (:biff.xtdb/node (get-context)))
+                                         '{:find  [(pull p [:trade-proposal/ticker
+                                                            :trade-proposal/action
+                                                            :trade-proposal/quantity
+                                                            :trade-proposal/decision
+                                                            :trade-proposal/reason])]
+                                           :where [[p :trade-proposal/ticker]]}))"))}}}
