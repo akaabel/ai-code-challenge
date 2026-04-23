@@ -17,6 +17,13 @@
                                 '[repl :refer [get-context]])
                        (news/run-news-agent (get-context))"))}
 
+  analyse
+  {:doc "Run analyst agent — rates each candidate (1–10), recommends buy/sell/hold, writes :analysis to XTDB"
+   :task (print-result
+          (nrepl-eval "(require '[com.robotfund.agents.analyst :as analyst]
+                                '[repl :refer [get-context]])
+                       (analyst/run-analyst (get-context))"))}
+
   reports
   {:doc "Query XTDB — print all :news-report entries (ticker, sentiment, summary)"
    :task (print-result
@@ -26,4 +33,16 @@
                                          '{:find  [(pull r [:news-report/ticker
                                                             :news-report/sentiment
                                                             :news-report/summary])]
-                                           :where [[r :news-report/ticker]]}))"))}}}
+                                           :where [[r :news-report/ticker]]}))"))}
+
+  analyses
+  {:doc "Query XTDB — print all :analysis entries (ticker, rating, action, reasoning)"
+   :task (print-result
+          (nrepl-eval "(require '[xtdb.api :as xt]
+                                '[repl :refer [get-context]])
+                       (mapv first (xt/q (xt/db (:biff.xtdb/node (get-context)))
+                                         '{:find  [(pull a [:analysis/ticker
+                                                            :analysis/rating
+                                                            :analysis/action
+                                                            :analysis/reasoning])]
+                                           :where [[a :analysis/ticker]]}))"))}}}
