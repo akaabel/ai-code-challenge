@@ -141,7 +141,7 @@ This document is **living** — we update it as we learn, reorder steps if somet
 
 ---
 
-## Step 7 — News agent (first LLM agent) `[ ]`
+## Step 7 — News agent (first LLM agent) `[x]`
 
 **Goal:** For each candidate, fetch news and score sentiment via LLM.
 
@@ -348,6 +348,7 @@ Not yet detailed — will plan once we see how the trading week goes. Likely sha
 
 Newest on top.
 
+- 2026-04-23 — Step 7 done: News agent fetches Alpaca news, scores sentiment via Gemini, writes :news-report linked to :candidate and :llm-call; llm/complete now returns {:text :llm-call-id}; retry covers 429+503
 - 2026-04-23 — Step 6 done: Scanner agent with 10-ticker watchlist, price-change >1.5% and volume-spike >2× triggers, candidates persisted to XTDB; bb.edn + ops/nrepl-eval.bb added for manual testing
 - 2026-04-22 — Step 5 done: Gemini LLM client with 429 retry, xt/await-tx, :llm-call logged to XTDB
 - 2026-04-22 — Step 4 done: Alpaca client with get-account, get-positions, get-bars (data API on data.alpaca.markets)

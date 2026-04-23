@@ -1,8 +1,9 @@
 (ns com.robotfund.alpaca
   (:require [clj-http.client :as http]))
 
-(def ^:private trading-url "https://paper-api.alpaca.markets/v2")
-(def ^:private data-url    "https://data.alpaca.markets/v2")
+(def ^:private trading-url    "https://paper-api.alpaca.markets/v2")
+(def ^:private data-url       "https://data.alpaca.markets/v2")
+(def ^:private data-v1beta1   "https://data.alpaca.markets/v1beta1")
 
 (defn- auth-headers []
   {"APCA-API-KEY-ID"     (System/getenv "ALPACA_KEY_ID")
@@ -36,6 +37,17 @@
                  :limit     limit
                  :start     (or start (days-ago-str 45))}
           end (assoc :end end))))
+
+(defn get-news
+  "Fetches recent news articles for ticker from Alpaca.
+   opts: :limit (default 10, max 50).
+   Returns a vector of article maps with :headline, :summary, :created_at, etc."
+  [ticker {:keys [limit] :or {limit 10}}]
+  (or (:news (get* data-v1beta1 "/news"
+                   {:symbols ticker
+                    :limit   limit
+                    :sort    "desc"}))
+      []))
 
 (comment
   ;; Account overview — cash, equity, buying power

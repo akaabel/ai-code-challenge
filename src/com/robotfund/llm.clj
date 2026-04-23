@@ -20,12 +20,13 @@
           sleep  (get retry-sleeps attempt)]
       (cond
         (= status 200) (:body resp)
-        (and (= status 429) sleep)
+        (and (#{429 503} status) sleep)
         (do (Thread/sleep sleep) (recur (inc attempt)))
         :else (throw (ex-info (str "Gemini API error status=" status) {:status status :body (:body resp)}))))))
 
 (defn complete
-  "Calls Gemini, persists an :llm-call entity to XTDB, returns the response text.
+  "Calls Gemini, persists an :llm-call entity to XTDB.
+   Returns {:text response-string :llm-call-id uuid}.
    opts: :model (default fast-model)"
   [ctx prompt {:keys [model] :or {model fast-model}}]
   (let [api-key (System/getenv "GEMINI_API_KEY")
@@ -36,22 +37,20 @@
         elapsed (- (System/currentTimeMillis) t0)
         text    (-> resp :candidates first :content :parts first :text)
         in-tok  (or (-> resp :usageMetadata :promptTokenCount) 1)
-        out-tok (or (-> resp :usageMetadata :candidatesTokenCount) 1)]
-    (let [node (:biff.xtdb/node ctx)
-          tx   (xt/submit-tx node
-                             [[::xt/put {:xt/id                  (random-uuid)
-                                         :llm-call/model         model
-                                         :llm-call/prompt        prompt
-                                         :llm-call/response      text
-                                         :llm-call/input-tokens  in-tok
-                                         :llm-call/output-tokens out-tok
-                                         :llm-call/latency-ms    elapsed
-                                         :llm-call/called-at     (java.util.Date.)}]])]
-      (xt/await-tx node tx))
-    ;;=> Syntax error compiling at (src/com/robotfund/llm.clj:41:16).
-    ;;   Unable to resolve symbol: model in this context
-    ;;   
-    text))
+        out-tok (or (-> resp :usageMetadata :candidatesTokenCount) 1)
+        call-id (random-uuid)
+        node    (:biff.xtdb/node ctx)
+        tx      (xt/submit-tx node
+                               [[::xt/put {:xt/id                  call-id
+                                           :llm-call/model         model
+                                           :llm-call/prompt        prompt
+                                           :llm-call/response      text
+                                           :llm-call/input-tokens  in-tok
+                                           :llm-call/output-tokens out-tok
+                                           :llm-call/latency-ms    elapsed
+                                           :llm-call/called-at     (java.util.Date.)}]])]
+    (xt/await-tx node tx)
+    {:text text :llm-call-id call-id}))
 
 (comment
   (require '[com.robotfund :as app]
@@ -60,8 +59,8 @@
 
   (def ctx @app/system)
 
-  ;; Basic call — returns the answer and writes an :llm-call entity to XTDB
-  (llm/complete ctx "What is 2+2?" {})
+  ;; Basic call — returns {:text "..." :llm-call-id uuid} and writes :llm-call to XTDB
+  (:text (llm/complete ctx "What is 2+2?" {}))
 
   ;; Quality model
   ;; This does not work, probably because the quality models are not yet generally available. 
