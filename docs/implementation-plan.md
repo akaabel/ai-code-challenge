@@ -125,7 +125,7 @@ This document is **living** — we update it as we learn, reorder steps if somet
 
 ---
 
-## Step 6 — Scanner agent (pure code, no LLM) `[ ]`
+## Step 6 — Scanner agent (pure code, no LLM) `[x]`
 
 **Goal:** First agent. Pulls bars for a small watchlist, emits `::candidate`s on simple triggers.
 
@@ -348,6 +348,7 @@ Not yet detailed — will plan once we see how the trading week goes. Likely sha
 
 Newest on top.
 
+- 2026-04-23 — Step 6 done: Scanner agent with 10-ticker watchlist, price-change >1.5% and volume-spike >2× triggers, candidates persisted to XTDB; bb.edn + ops/nrepl-eval.bb added for manual testing
 - 2026-04-22 — Step 5 done: Gemini LLM client with 429 retry, xt/await-tx, :llm-call logged to XTDB
 - 2026-04-22 — Step 4 done: Alpaca client with get-account, get-positions, get-bars (data API on data.alpaca.markets)
 - 2026-04-21 — Step 3.5 done: secrets migrated to ~/fund/.env; ops/dev.sh replaces clj -M:dev dev
