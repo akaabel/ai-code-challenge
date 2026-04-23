@@ -1,9 +1,11 @@
 #!/usr/bin/env bb
 ;; nREPL client using babashka's built-in bencode.core.
 ;; Opens a connection, evals, sends a close op, then closes the socket.
-;; Usage: bb ops/nrepl-eval.bb '<clojure expression>'
+;; Usable both as a library (required from bb.edn tasks) and as a CLI script.
+;; CLI usage: bb ops/nrepl_eval.bb '<clojure expression>'
 
-(require '[bencode.core :as b])
+(ns nrepl-eval
+  (:require [bencode.core :as b]))
 
 (defn- bytes->str [x]
   (if (bytes? x) (String. x) (str x)))
@@ -39,12 +41,16 @@
                    (or errors err)
                    (or exceptions ex))))))))
 
-(let [code (first *command-line-args*)]
-  (when-not code
-    (println "Usage: bb ops/nrepl-eval.bb '<expression>'")
-    (System/exit 1))
-  (let [{:keys [vals err ex]} (nrepl-eval code)]
-    (when ex  (println "EXCEPTION:" ex))
-    (when err (println "ERROR:" err))
-    (doseq [v vals] (println v))
-    (when (and (empty? vals) (nil? err) (nil? ex)) (println "nil"))))
+(defn print-result [{:keys [vals err ex]}]
+  (when ex  (println "EXCEPTION:" ex))
+  (when err (println "ERROR:" err))
+  (doseq [v vals] (println v))
+  (when (and (empty? vals) (nil? err) (nil? ex)) (println "nil")))
+
+;; Only run as a CLI script when executed directly, not when required as a library.
+(when (= *file* (System/getProperty "babashka.file"))
+  (let [code (first *command-line-args*)]
+    (when-not code
+      (println "Usage: bb ops/nrepl_eval.bb '<expression>'")
+      (System/exit 1))
+    (print-result (nrepl-eval code))))

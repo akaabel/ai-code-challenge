@@ -1,24 +1,29 @@
-{:tasks
- {:requires ([babashka.process :refer [shell]])
+{:paths ["ops"]
+
+ :tasks
+ {:requires ([nrepl-eval :refer [nrepl-eval print-result]])
 
   scan
   {:doc "Run scanner — finds price-change and volume-spike candidates, writes :candidate to XTDB"
-   :task (shell "bb" "ops/nrepl-eval.bb"
-                "(require '[com.robotfund.agents.scanner :as scanner] '[repl :refer [get-context]])
-                 (scanner/run-scanner (get-context))")}
+   :task (print-result
+          (nrepl-eval "(require '[com.robotfund.agents.scanner :as scanner]
+                                '[repl :refer [get-context]])
+                       (scanner/run-scanner (get-context))"))}
 
   news
   {:doc "Run news agent — fetches Alpaca headlines, scores sentiment via LLM, writes :news-report to XTDB"
-   :task (shell "bb" "ops/nrepl-eval.bb"
-                "(require '[com.robotfund.agents.news :as news] '[repl :refer [get-context]])
-                 (news/run-news-agent (get-context))")}
+   :task (print-result
+          (nrepl-eval "(require '[com.robotfund.agents.news :as news]
+                                '[repl :refer [get-context]])
+                       (news/run-news-agent (get-context))"))}
 
   reports
   {:doc "Query XTDB — print all :news-report entries (ticker, sentiment, summary)"
-   :task (shell "bb" "ops/nrepl-eval.bb"
-                "(require '[xtdb.api :as xt] '[repl :refer [get-context]])
-                 (mapv first (xt/q (xt/db (:biff.xtdb/node (get-context)))
-                                   '{:find  [(pull r [:news-report/ticker
-                                                      :news-report/sentiment
-                                                      :news-report/summary])]
-                                     :where [[r :news-report/ticker]]}))")}}}
+   :task (print-result
+          (nrepl-eval "(require '[xtdb.api :as xt]
+                                '[repl :refer [get-context]])
+                       (mapv first (xt/q (xt/db (:biff.xtdb/node (get-context)))
+                                         '{:find  [(pull r [:news-report/ticker
+                                                            :news-report/sentiment
+                                                            :news-report/summary])]
+                                           :where [[r :news-report/ticker]]}))"))}}}
