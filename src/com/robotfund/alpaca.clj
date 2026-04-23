@@ -1,5 +1,6 @@
 (ns com.robotfund.alpaca
-  (:require [clj-http.client :as http]))
+  (:require [cheshire.core :as json]
+            [clj-http.client :as http]))
 
 (def ^:private trading-url    "https://paper-api.alpaca.markets/v2")
 (def ^:private data-url       "https://data.alpaca.markets/v2")
@@ -37,6 +38,32 @@
                  :limit     limit
                  :start     (or start (days-ago-str 45))}
           end (assoc :end end))))
+
+(defn- post* [base path body]
+  (-> (http/post (str base path)
+                 {:headers      (merge (auth-headers) {"content-type" "application/json"})
+                  :body         (json/encode body)
+                  :as           :json})
+      :body))
+
+(defn place-order
+  "Places a market day order. side is \"buy\" or \"sell\".
+   Returns the Alpaca order map."
+  [symbol qty side]
+  (post* trading-url "/orders"
+         {:symbol        symbol
+          :qty           (str qty)
+          :side          side
+          :type          "market"
+          :time_in_force "day"}))
+
+(defn get-order [alpaca-id]
+  (get* trading-url (str "/orders/" alpaca-id) {}))
+
+(defn cancel-order [alpaca-id]
+  (http/delete (str trading-url "/orders/" alpaca-id)
+               {:headers           (auth-headers)
+                :throw-exceptions  false}))
 
 (defn get-news
   "Fetches recent news articles for ticker from Alpaca.

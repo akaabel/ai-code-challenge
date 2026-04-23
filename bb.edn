@@ -65,4 +65,27 @@
                                                             :trade-proposal/quantity
                                                             :trade-proposal/decision
                                                             :trade-proposal/reason])]
-                                           :where [[p :trade-proposal/ticker]]}))"))}}}
+                                           :where [[p :trade-proposal/ticker]]}))"))}
+
+  execute
+  {:doc "Run executor — places approved proposals as Alpaca market orders, reconciles fills, cancels stale orders"
+   :task (print-result
+          (nrepl-eval "(require '[com.robotfund.agents.executor :as executor]
+                                '[repl :refer [get-context]])
+                       (executor/run-executor (get-context))"))}
+
+  pipeline
+  {:doc "Run full pipeline: scan → news → analyse → risk → execute"
+   :task (print-result
+          (nrepl-eval "(require '[com.robotfund.agents.scanner  :as scanner]
+                                '[com.robotfund.agents.news     :as news]
+                                '[com.robotfund.agents.analyst  :as analyst]
+                                '[com.robotfund.agents.risk     :as risk]
+                                '[com.robotfund.agents.executor :as executor]
+                                '[repl :refer [get-context]])
+                       (let [ctx (get-context)]
+                         {:candidates (scanner/run-scanner ctx)
+                          :reports    (news/run-news-agent ctx)
+                          :analyses   (analyst/run-analyst ctx)
+                          :proposals  (risk/run-risk ctx)
+                          :orders     (executor/run-executor ctx)})"))}}}

@@ -193,7 +193,7 @@ This document is **living** — we update it as we learn, reorder steps if somet
 
 ---
 
-## Step 10 — Executor (real paper trades) `[ ]`
+## Step 10 — Executor (real paper trades) `[x]`
 
 **Goal:** Place approved proposals on Alpaca paper. End-to-end pipeline works manually.
 
@@ -348,6 +348,7 @@ Not yet detailed — will plan once we see how the trading week goes. Likely sha
 
 Newest on top.
 
+- 2026-04-23 — Step 10 done: Executor places Alpaca market orders for approved proposals, polls fills (3s), reconciles/cancels stale pending orders; alpaca/place-order + get-order + cancel-order added; bb execute + bb pipeline tasks added
 - 2026-04-23 — Step 9 done: Risk Manager applies hard Clojure rules (max 10% position, 30% sector, 5 trades/day, min rating 7 to buy, max 3 to sell, no shorting), writes :trade-proposal; schema updated to make quantity optional on rejected proposals; bb risk + bb proposals tasks added
 - 2026-04-23 — Step 8 done: Analyst agent rates each candidate 1–10, recommends buy/sell/hold via Gemini, writes :analysis to XTDB; bb analyse + bb analyses tasks added
 - 2026-04-23 — Step 7 done: News agent fetches Alpaca news, scores sentiment via Gemini, writes :news-report linked to :candidate and :llm-call; llm/complete now returns {:text :llm-call-id}; retry covers 429+503
