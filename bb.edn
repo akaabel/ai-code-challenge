@@ -3,6 +3,36 @@
  :tasks
  {:requires ([nrepl-eval :refer [nrepl-eval print-result]])
 
+  help
+  {:doc "List all tasks with their remote-call profile (LLM / Alpaca / local)"
+   :override-builtin true
+   :task (do
+           (println)
+           (println "Available bb tasks")
+           (println)
+           (println "PIPELINE AGENTS  (each writes results to XTDB)")
+           (println "  bb scan             [Alpaca]        Discover today's movers + most-actives via Alpaca screener,")
+           (println "                                      flag price-change >1.5% or volume-spike >2×, write :candidate")
+           (println "  bb news             [Alpaca + LLM]  Fetch headlines per candidate from Alpaca news API,")
+           (println "                                      score sentiment via Gemini, write :news-report")
+           (println "  bb analyse          [LLM]           Rate each candidate 1–10 and recommend buy/sell/hold")
+           (println "                                      via Gemini, write :analysis")
+           (println "  bb risk             [Alpaca]        Apply hard Clojure rules (10% position cap, 30% sector cap,")
+           (println "                                      ≤5 trades/day, min rating 7 to buy), write :trade-proposal")
+           (println "  bb execute          [Alpaca]        Place approved proposals as Alpaca market orders,")
+           (println "                                      reconcile fills, cancel stale orders, write :order + :fill")
+           (println "  bb pipeline         [Alpaca + LLM]  Full pipeline: scan → news → analyse → risk → execute")
+           (println)
+           (println "QUERIES  (read-only, local XTDB — no remote calls)")
+           (println "  bb reports          [local]         All :news-report entries — ticker, sentiment score, summary")
+           (println "  bb analyses         [local]         All :analysis entries — ticker, rating, action, reasoning")
+           (println "  bb proposals        [local]         All :trade-proposal entries — ticker, action, decision, reason")
+           (println)
+           (println "PORTFOLIO")
+           (println "  bb sector-exposure  [Alpaca]        Live portfolio breakdown — market value and % of equity")
+           (println "                                      per sector bucket (incl. :other for unknown tickers)")
+           (println))}
+
   scan
   {:doc "Run scanner — finds price-change and volume-spike candidates, writes :candidate to XTDB"
    :task (print-result
