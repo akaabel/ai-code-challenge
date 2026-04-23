@@ -25,20 +25,15 @@
                        (/ (reduce + (map #(double (:v %)) hist-bars)) (count hist-bars)))
           vol-ratio  (when (and avg-vol (pos? avg-vol))
                        (/ last-vol avg-vol))]
-      (cond-> []
-        (and pct-chg (> (Math/abs pct-chg) price-change-threshold))
-        (conj {:xt/id                      (random-uuid)
-               :candidate/ticker            ticker
-               :candidate/scanned-at        now
-               :candidate/trigger           :price-change
-               :candidate/price-change-pct  pct-chg})
-
-        (and vol-ratio (> vol-ratio volume-spike-ratio))
-        (conj {:xt/id                  (random-uuid)
-               :candidate/ticker        ticker
-               :candidate/scanned-at    now
-               :candidate/trigger       :volume-spike
-               :candidate/volume-ratio  vol-ratio})))))
+      (let [price-trigger? (and pct-chg (> (Math/abs pct-chg) price-change-threshold))
+            vol-trigger?   (and vol-ratio (> vol-ratio volume-spike-ratio))]
+        (when (or price-trigger? vol-trigger?)
+          [(cond-> {:xt/id                (random-uuid)
+                    :candidate/ticker      ticker
+                    :candidate/scanned-at  now
+                    :candidate/trigger     (if price-trigger? :price-change :volume-spike)}
+             price-trigger? (assoc :candidate/price-change-pct pct-chg)
+             vol-trigger?   (assoc :candidate/volume-ratio vol-ratio))])))))
 
 (defn run-scanner
   "Scans watchlist for price-change (>1.5%) and volume-spike (>2× 20-day avg).
@@ -55,7 +50,12 @@
              (do
                (doseq [c candidates] (schema/validate! :candidate c))
                (xt/await-tx node (xt/submit-tx node (mapv #(vector ::xt/put %) candidates)))
-               (println (str "Scanner: " ticker " → " (count candidates) " candidate(s)"))
+               (let [c (first candidates)]
+                 (println (str "Scanner: " ticker " → candidate"
+                               (when (:candidate/price-change-pct c)
+                                 (format " price=%+.2f%%" (:candidate/price-change-pct c)))
+                               (when (:candidate/volume-ratio c)
+                                 (format " vol=%.1f×" (:candidate/volume-ratio c))))))
                (+ total (count candidates)))
              (do
                (println (str "Scanner: " ticker " → no trigger"))
