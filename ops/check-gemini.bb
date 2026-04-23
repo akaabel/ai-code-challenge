@@ -26,8 +26,9 @@
 
 (println (str "Checking Gemini API key: " (subs api-key 0 8) "..."))
 
+;; Some possible models to test against: "gemini-2.5-flash", "gemini-2.5-pro", "gemini-3-flash-preview"
 (let [url  (str "https://generativelanguage.googleapis.com/v1beta"
-                "/models/gemini-2.5-flash:generateContent?key=" api-key)
+                "/models/gemini-3-flash-preview:generateContent?key=" api-key)
       body (json/encode {:contents [{:parts [{:text "Reply with the single word: ok"}]}]})
       resp (http/post url {:headers {"Content-Type" "application/json"} :body body :throw false})]
   (if (= (:status resp) 200)

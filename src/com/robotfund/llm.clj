@@ -64,9 +64,13 @@
   (llm/complete ctx "What is 2+2?" {})
 
   ;; Quality model
+  ;; This does not work, probably because the quality models are not yet generally available. 
   (llm/complete ctx "Summarise the investment case for NVDA in one sentence." {:model llm/quality-model})
+
+  (llm/complete ctx "Summarise the investment case for NVDA in one sentence." {})
 
   ;; Confirm the :llm-call was persisted (fresh db snapshot)
   (xt/q (xt/db (:biff.xtdb/node ctx))
         '{:find  [(pull e [*])]
-          :where [[e :llm-call/model]]}))
+          :where [[e :llm-call/model]]})
+  )
