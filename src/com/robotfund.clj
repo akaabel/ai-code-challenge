@@ -5,6 +5,7 @@
             [com.robotfund.home :as home]
             [com.robotfund.middleware :as mid]
             [com.robotfund.ui :as ui]
+            [com.robotfund.dashboard :as dashboard]
             [com.robotfund.schedule :as schedule]
             [com.robotfund.worker :as worker]
             [com.robotfund.schema :as schema]
@@ -22,7 +23,8 @@
    home/module
    schema/module
    worker/module
-   schedule/module])
+   schedule/module
+   dashboard/module])
 
 (def routes [["" {:middleware [mid/wrap-site-defaults]}
               (keep :routes modules)]

@@ -15,7 +15,7 @@
    (biff/form
     {:action "/auth/send-link"
      :id "signup"
-     :hidden {:on-error "/"}}
+     :hidden {:on-error "/login"}}
     (biff/recaptcha-callback "submitSignup" "signup")
     [:h2.text-2xl.font-bold (str "Sign up for " settings/app-name)]
     [:.h-3]
@@ -116,7 +116,7 @@
           "not-signed-in" "You must be signed in to view that page."
           "There was an error.")]])
     [:.h-1]
-    [:.text-sm "Don't have an account yet? " [:a.link {:href "/"} "Sign up"] "."]
+    [:.text-sm "Don't have an account yet? " [:a.link {:href "/login"} "Sign up"] "."]
     [:.h-3]
     biff/recaptcha-disclosure
     email-disabled-notice)))
@@ -164,7 +164,7 @@
 
 (def module
   {:routes [["" {:middleware [mid/wrap-redirect-signed-in]}
-             ["/"                  {:get home-page}]]
+             ["/login"             {:get home-page}]]
             ["/link-sent"          {:get link-sent}]
             ["/verify-link"        {:get verify-email-page}]
             ["/signin"             {:get signin-page}]

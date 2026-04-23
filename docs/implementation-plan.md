@@ -225,7 +225,7 @@ This document is **living** — we update it as we learn, reorder steps if somet
 
 ---
 
-## Step 12 — Dashboard v1: portfolio + timeline `[ ]`
+## Step 12 — Dashboard v1: portfolio + timeline `[x]`
 
 **Goal:** Open the browser, see what's happening.
 
@@ -348,6 +348,7 @@ Not yet detailed — will plan once we see how the trading week goes. Likely sha
 
 Newest on top.
 
+- 2026-04-23 — Step 12 done: dashboard.clj with / (portfolio: equity/cash/P&L/positions from Alpaca, last scan time) and /timeline (last 100 XTDB events, all 6 agent types, newest first); home / route moved to /login to free root path
 - 2026-04-23 — Step 11 done: schedule.clj with market-hours guard (ET, 09:30–16:00, M–F, 2026 NYSE holidays), five agent tasks staggered at +0/+2/+5/+7/+10 min within 15-min cycle; pure java.time, no extra deps
 - 2026-04-23 — Dynamic scanner: replaced static 10-ticker watchlist with Alpaca screener (movers + most-actives); min-price $5 filter eliminates warrants/penny stocks; fallback watchlist retained for when screener is unavailable
 - 2026-04-23 — Step 10 done: Executor places Alpaca market orders for approved proposals, polls fills (3s), reconciles/cancels stale pending orders; alpaca/place-order + get-order + cancel-order added; bb execute + bb pipeline tasks added
