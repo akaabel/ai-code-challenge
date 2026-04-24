@@ -60,7 +60,8 @@
    :biff.beholder/on-save #'on-save
    :biff.middleware/on-error #'ui/on-error
    :biff.xtdb/tx-fns biff/tx-fns
-   :com.robotfund/chat-clients (atom #{})})
+   :com.robotfund/chat-clients      (atom #{})
+   :com.robotfund/dashboard-clients (atom #{})})
 
 (defonce system (atom {}))
 

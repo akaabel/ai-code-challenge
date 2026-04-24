@@ -6,7 +6,8 @@
             [com.robotfund.ui :as ui]
             [rum.core :as rum]
             [xtdb.api :as xt])
-  (:import (java.time ZoneId)
+  (:import (java.io PipedInputStream PipedOutputStream)
+           (java.time ZoneId)
            (java.time.format DateTimeFormatter)))
 
 ;; --- Formatting helpers ---
@@ -194,6 +195,43 @@
                        "No agent activity yet."]]
                  [:<> (map event-row events)]))}))
 
+;; --- SSE live-push ---
+
+(def ^:private sse-event (.getBytes "event: update\ndata: \n\n"))
+
+(defn sse-handler [{:keys [com.robotfund/dashboard-clients] :as _ctx}]
+  (let [pos (PipedOutputStream.)
+        pis (PipedInputStream. pos 4096)]
+    ;; Write initial keep-alive comment before registering; data sits in pipe buffer
+    ;; until Jetty starts reading. Also confirms the stream is alive to the browser.
+    (.write pos (.getBytes ": keepalive\n\n"))
+    (.flush pos)
+    (swap! dashboard-clients conj pos)
+    {:status  200
+     :headers {"content-type"      "text/event-stream"
+               "cache-control"     "no-cache"
+               "x-accel-buffering" "no"}
+     :body    pis}))
+
+(defn notify-dashboard [{:keys [com.robotfund/dashboard-clients]} tx]
+  (when (some (fn [[op & args]]
+                (when (= op ::xt/put)
+                  (let [[doc] args]
+                    (or (contains? doc :candidate/ticker)
+                        (contains? doc :news-report/ticker)
+                        (contains? doc :analysis/ticker)
+                        (contains? doc :trade-proposal/ticker)
+                        (contains? doc :order/ticker)
+                        (contains? doc :fill/ticker)))))
+              (::xt/tx-ops tx))
+    (doseq [pos @dashboard-clients]
+      (try
+        (locking pos
+          (.write pos sse-event)
+          (.flush pos))
+        (catch Exception _
+          (swap! dashboard-clients disj pos))))))
+
 (defn timeline-page [{:keys [biff/db biff.xtdb/node] :as ctx}]
   (let [db     (or db (xt/db node))
         events (timeline-events db)]
@@ -201,20 +239,21 @@
      (nav :timeline)
      [:div.flex.items-center.justify-between.mb-3
       [:h2.text-sm.font-semibold.text-gray-700 "Agent Activity"]
-      [:span.text-xs.text-gray-400 "Refreshes every 10s · last 100 events · newest first"]]
-     [:table.w-full.text-sm
-      [:thead
-       [:tr.text-left.text-xs.text-gray-500.uppercase.border-b.border-gray-200
-        [:th.py-2.pr-6 "Time (ET)"]
-        [:th.py-2.pr-6 "Agent"]
-        [:th.py-2.pr-6 "Ticker"]
-        [:th.py-2 "Detail"]]]
-      [:tbody#timeline-events
-       {:hx-get "/timeline/rows" :hx-trigger "every 10s" :hx-swap "innerHTML"}
-       (if (empty? events)
-         [:tr [:td.py-4.text-sm.text-gray-500.text-center {:col-span "4"}
-               "No agent activity yet. Run the pipeline to see events here."]]
-         (map event-row events))]])))
+      [:span.text-xs.text-gray-400 "Live · last 100 events · newest first"]]
+     [:div {:hx-ext "sse" :sse-connect "/timeline/events"}
+      [:table.w-full.text-sm
+       [:thead
+        [:tr.text-left.text-xs.text-gray-500.uppercase.border-b.border-gray-200
+         [:th.py-2.pr-6 "Time (ET)"]
+         [:th.py-2.pr-6 "Agent"]
+         [:th.py-2.pr-6 "Ticker"]
+         [:th.py-2 "Detail"]]]
+       [:tbody#timeline-events
+        {:hx-get "/timeline/rows" :hx-trigger "sse:update, every 30s" :hx-swap "innerHTML"}
+        (if (empty? events)
+          [:tr [:td.py-4.text-sm.text-gray-500.text-center {:col-span "4"}
+                "No agent activity yet. Run the pipeline to see events here."]]
+          (map event-row events))]]])))
 
 ;; --- Trade drilldown ---
 
@@ -346,7 +385,9 @@
             "No order placed (proposal rejected or executor not yet run)"]))))))
 
 (def module
-  {:routes [["/"              {:get portfolio-page}]
-            ["/timeline"      {:get timeline-page}]
-            ["/timeline/rows" {:get timeline-rows}]
-            ["/trade/:id"     {:get trade-page}]]})
+  {:routes [["/"                {:get portfolio-page}]
+            ["/timeline"        {:get timeline-page}]
+            ["/timeline/rows"   {:get timeline-rows}]
+            ["/timeline/events" {:get sse-handler}]
+            ["/trade/:id"       {:get trade-page}]]
+   :on-tx  notify-dashboard})
