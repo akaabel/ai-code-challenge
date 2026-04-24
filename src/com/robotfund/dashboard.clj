@@ -197,14 +197,13 @@
 
 ;; --- SSE live-push ---
 
-(def ^:private sse-event (.getBytes "event: update\ndata: \n\n"))
+(def ^:private sse-event     (.getBytes "event: update\ndata: \n\n"))
+(def ^:private sse-keepalive (.getBytes ": k\n\n"))
 
 (defn sse-handler [{:keys [com.robotfund/dashboard-clients] :as _ctx}]
   (let [pos (PipedOutputStream.)
         pis (PipedInputStream. pos 4096)]
-    ;; Write initial keep-alive comment before registering; data sits in pipe buffer
-    ;; until Jetty starts reading. Also confirms the stream is alive to the browser.
-    (.write pos (.getBytes ": keepalive\n\n"))
+    (.write pos sse-keepalive)
     (.flush pos)
     (swap! dashboard-clients conj pos)
     {:status  200
@@ -214,20 +213,22 @@
      :body    pis}))
 
 (defn notify-dashboard [{:keys [com.robotfund/dashboard-clients]} tx]
-  (when (some (fn [[op & args]]
-                (when (= op ::xt/put)
-                  (let [[doc] args]
-                    (or (contains? doc :candidate/ticker)
-                        (contains? doc :news-report/ticker)
-                        (contains? doc :analysis/ticker)
-                        (contains? doc :trade-proposal/ticker)
-                        (contains? doc :order/ticker)
-                        (contains? doc :fill/ticker)))))
-              (::xt/tx-ops tx))
+  ;; Every tx: send keep-alive (or real event) to all clients and evict dead pipes.
+  (let [agent-tx? (some (fn [[op & args]]
+                          (when (= op ::xt/put)
+                            (let [[doc] args]
+                              (or (contains? doc :candidate/ticker)
+                                  (contains? doc :news-report/ticker)
+                                  (contains? doc :analysis/ticker)
+                                  (contains? doc :trade-proposal/ticker)
+                                  (contains? doc :order/ticker)
+                                  (contains? doc :fill/ticker)))))
+                        (::xt/tx-ops tx))
+        payload   (if agent-tx? sse-event sse-keepalive)]
     (doseq [pos @dashboard-clients]
       (try
         (locking pos
-          (.write pos sse-event)
+          (.write pos payload)
           (.flush pos))
         (catch Exception _
           (swap! dashboard-clients disj pos))))))
@@ -249,7 +250,7 @@
          [:th.py-2.pr-6 "Ticker"]
          [:th.py-2 "Detail"]]]
        [:tbody#timeline-events
-        {:hx-get "/timeline/rows" :hx-trigger "sse:update, every 30s" :hx-swap "innerHTML"}
+        {:hx-get "/timeline/rows" :hx-trigger "sse:update" :hx-swap "innerHTML"}
         (if (empty? events)
           [:tr [:td.py-4.text-sm.text-gray-500.text-center {:col-span "4"}
                 "No agent activity yet. Run the pipeline to see events here."]]
