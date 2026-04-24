@@ -1,11 +1,15 @@
 (ns com.robotfund.dashboard
-  (:require [com.biffweb :as biff :refer [q]]
+  (:require [clojure.string :as string]
+            [clojure.tools.logging :as log]
+            [com.biffweb :as biff :refer [q]]
             [com.robotfund.alpaca :as alpaca]
             [com.robotfund.ui :as ui]
-            [clojure.tools.logging :as log]
+            [rum.core :as rum]
             [xtdb.api :as xt])
   (:import (java.time ZoneId)
            (java.time.format DateTimeFormatter)))
+
+;; --- Formatting helpers ---
 
 (def ^:private et-zone (ZoneId/of "America/New_York"))
 (def ^:private ts-fmt  (DateTimeFormatter/ofPattern "MMM d HH:mm:ss"))
@@ -34,23 +38,24 @@
   (let [s (or s "")]
     (if (> (count s) n) (str (subs s 0 n) "…") s)))
 
+;; --- Layout ---
+
 (defn- dash-page [ctx & body]
-  (ui/base ctx [:div.p-4.mx-auto.max-w-screen-lg body]))
+  (ui/base ctx
+   [:div.p-4.mx-auto.max-w-screen-lg body]))
 
 (defn- nav [active]
   [:nav.flex.items-center.justify-between.mb-6.pb-3.border-b.border-gray-200
    [:h1.text-xl.font-bold "Robot Fund"]
    [:div.flex.gap-4
     [:a {:href  "/"
-         :class (if (= active :portfolio)
-                  "font-semibold text-blue-600"
-                  "text-gray-600 hover:text-blue-500")}
+         :class (if (= active :portfolio) "font-semibold text-blue-600" "text-gray-600 hover:text-blue-500")}
      "Portfolio"]
     [:a {:href  "/timeline"
-         :class (if (= active :timeline)
-                  "font-semibold text-blue-600"
-                  "text-gray-600 hover:text-blue-500")}
+         :class (if (= active :timeline) "font-semibold text-blue-600" "text-gray-600 hover:text-blue-500")}
      "Timeline"]]])
+
+;; --- Portfolio ---
 
 (defn- stat-card [label value value-class]
   [:div.bg-white.rounded.border.border-gray-200.p-4
@@ -102,10 +107,10 @@
         "Could not fetch account data from Alpaca. Check logs."]
        [:<>
         [:div.grid.grid-cols-2.gap-3.mb-6
-         (stat-card "Equity"       (fmt-usd equity)                              "")
-         (stat-card "Cash"         (fmt-usd cash)                                "")
-         (stat-card "Today's P&L"  (fmt-signed pnl)                (pnl-class pnl))
-         (stat-card "Buying Power" (fmt-usd (parse-d (:buying_power account)))   "")]
+         (stat-card "Equity"       (fmt-usd equity)                            "")
+         (stat-card "Cash"         (fmt-usd cash)                              "")
+         (stat-card "Today's P&L"  (fmt-signed pnl)             (pnl-class pnl))
+         (stat-card "Buying Power" (fmt-usd (parse-d (:buying_power account))) "")]
         [:div.mb-6
          [:h2.text-sm.font-semibold.text-gray-700.mb-2
           (str "Open Positions (" (count positions) ")")]
@@ -117,7 +122,7 @@
 
 (defn- event-badge [type]
   (case type
-    :candidate [:span.inline-block.px-2.rounded.text-xs.font-medium.bg-blue-100.text-blue-700   "SCAN"]
+    :candidate [:span.inline-block.px-2.rounded.text-xs.font-medium.bg-blue-100.text-blue-700    "SCAN"]
     :news      [:span.inline-block.px-2.rounded.text-xs.font-medium.bg-purple-100.text-purple-700 "NEWS"]
     :analysis  [:span.inline-block.px-2.rounded.text-xs.font-medium.bg-yellow-100.text-yellow-800 "ANALYST"]
     :proposal  [:span.inline-block.px-2.rounded.text-xs.font-medium.bg-orange-100.text-orange-700 "RISK"]
@@ -148,6 +153,18 @@
                     (format "%.2f" (double (or (:fill/price e) 0.0))))
     ""))
 
+(defn- event-row [e]
+  (let [trade-link (when (#{:proposal :order} (:event/type e))
+                     (let [pid (case (:event/type e)
+                                 :proposal (:xt/id e)
+                                 :order    (:order/proposal-id e))]
+                       [:a.ml-2.text-blue-500 {:href (str "/trade/" pid)} "view →"]))]
+    [:tr.border-b.border-gray-100
+     [:td.py-2.pr-6.text-xs.font-mono.text-gray-400 (fmt-time (:event/time e))]
+     [:td.py-2.pr-6 (event-badge (:event/type e))]
+     [:td.py-2.pr-6.font-mono.font-semibold (event-ticker e)]
+     [:td.py-2.text-gray-600.text-xs (event-detail e) trade-link]]))
+
 (defn- timeline-events [db]
   (->> (concat
          (map #(assoc % :event/type :candidate :event/time (:candidate/scanned-at %))
@@ -166,6 +183,17 @@
        (sort-by :event/time #(compare %2 %1))
        (take 100)))
 
+(defn timeline-rows [{:keys [biff/db biff.xtdb/node] :as _ctx}]
+  (let [db     (or db (xt/db node))
+        events (timeline-events db)]
+    {:status  200
+     :headers {"content-type" "text/html; charset=utf-8"}
+     :body    (rum/render-static-markup
+               (if (empty? events)
+                 [:tr [:td.py-4.text-sm.text-gray-500.text-center {:col-span "4"}
+                       "No agent activity yet."]]
+                 [:<> (map event-row events)]))}))
+
 (defn timeline-page [{:keys [biff/db biff.xtdb/node] :as ctx}]
   (let [db     (or db (xt/db node))
         events (timeline-events db)]
@@ -173,25 +201,152 @@
      (nav :timeline)
      [:div.flex.items-center.justify-between.mb-3
       [:h2.text-sm.font-semibold.text-gray-700 "Agent Activity"]
-      [:span.text-xs.text-gray-400 "Last 100 events · newest first · refresh to update"]]
-     (if (empty? events)
-       [:p.text-sm.text-gray-500.py-4
-        "No agent activity yet. Run the pipeline to see events here."]
-       [:table.w-full.text-sm
-        [:thead
-         [:tr.text-left.text-xs.text-gray-500.uppercase.border-b.border-gray-200
-          [:th.py-2.pr-6 "Time (ET)"]
-          [:th.py-2.pr-6 "Agent"]
-          [:th.py-2.pr-6 "Ticker"]
-          [:th.py-2 "Detail"]]]
-        [:tbody
-         (for [e events]
-           [:tr.border-b.border-gray-100
-            [:td.py-2.pr-6.text-xs.font-mono.text-gray-400 (fmt-time (:event/time e))]
-            [:td.py-2.pr-6 (event-badge (:event/type e))]
-            [:td.py-2.pr-6.font-mono.font-semibold (event-ticker e)]
-            [:td.py-2.text-gray-600.text-xs (event-detail e)]])]]))))
+      [:span.text-xs.text-gray-400 "Refreshes every 10s · last 100 events · newest first"]]
+     [:table.w-full.text-sm
+      [:thead
+       [:tr.text-left.text-xs.text-gray-500.uppercase.border-b.border-gray-200
+        [:th.py-2.pr-6 "Time (ET)"]
+        [:th.py-2.pr-6 "Agent"]
+        [:th.py-2.pr-6 "Ticker"]
+        [:th.py-2 "Detail"]]]
+      [:tbody#timeline-events
+       {:hx-get "/timeline/rows" :hx-trigger "every 10s" :hx-swap "innerHTML"}
+       (if (empty? events)
+         [:tr [:td.py-4.text-sm.text-gray-500.text-center {:col-span "4"}
+               "No agent activity yet. Run the pipeline to see events here."]]
+         (map event-row events))]])))
+
+;; --- Trade drilldown ---
+
+(defn- chain-card [& body]
+  [:div.rounded.border.border-gray-200.p-4.mb-3 body])
+
+(defn- llm-details [llm]
+  (when llm
+    [:details.mt-3
+     [:summary.text-xs.text-gray-500.cursor-pointer
+      (str (:llm-call/model llm)
+           " · " (:llm-call/input-tokens llm) "→" (:llm-call/output-tokens llm) " tokens"
+           " · " (:llm-call/latency-ms llm) "ms — click to expand")]
+     [:div.mt-2.rounded.bg-gray-50.p-3.text-xs.font-mono
+      [:div.text-gray-400.uppercase.mb-1 "Prompt"]
+      [:pre.whitespace-pre-wrap.break-words (:llm-call/prompt llm)]
+      [:div.text-gray-400.uppercase.mt-3.mb-1 "Response"]
+      [:pre.whitespace-pre-wrap.break-words (:llm-call/response llm)]]]))
+
+(defn- candidate-card [c]
+  (chain-card
+   [:div.flex.items-center.gap-2.mb-1
+    (event-badge :candidate)
+    [:span.font-semibold (str "1. Scanner — " (:candidate/ticker c))]]
+   [:div.text-sm.text-gray-700
+    (if (= :price-change (:candidate/trigger c))
+      (str "Price change: " (format "%+.1f%%" (* 100 (or (:candidate/price-change-pct c) 0.0))))
+      (str "Volume spike: " (format "%.1f×" (or (:candidate/volume-ratio c) 0.0))))
+    [:span.text-gray-400.ml-2 (fmt-time (:candidate/scanned-at c))]]))
+
+(defn- news-card [n llm]
+  (chain-card
+   [:div.flex.items-center.gap-2.mb-1
+    (event-badge :news)
+    [:span.font-semibold (str "2. News Agent — " (:news-report/ticker n))]]
+   [:div.text-sm.text-gray-700
+    (str "Sentiment: " (format "%+.2f" (double (or (:news-report/sentiment n) 0.0))))
+    [:span.text-gray-400.ml-2 (fmt-time (:news-report/reported-at n))]]
+   [:div.text-sm.text-gray-600.mt-1 (truncate (:news-report/summary n) 200)]
+   (when (seq (:news-report/headlines n))
+     [:ul.mt-2.text-xs.text-gray-500
+      (for [h (take 3 (:news-report/headlines n))]
+        [:li "• " h])])
+   (llm-details llm)))
+
+(defn- analysis-card [a llm]
+  (chain-card
+   [:div.flex.items-center.gap-2.mb-1
+    (event-badge :analysis)
+    [:span.font-semibold (str "3. Analyst — " (:analysis/ticker a))]]
+   [:div.text-sm.text-gray-700
+    (str "Rating: " (:analysis/rating a) "/10 · Action: " (name (or (:analysis/action a) :hold)))
+    [:span.text-gray-400.ml-2 (fmt-time (:analysis/analyzed-at a))]]
+   [:div.text-sm.text-gray-600.mt-1 (truncate (:analysis/reasoning a) 300)]
+   (llm-details llm)))
+
+(defn- proposal-card [p]
+  (let [d (:trade-proposal/decision p)]
+    (chain-card
+     [:div.flex.items-center.gap-2.mb-1
+      (event-badge :proposal)
+      [:span.font-semibold (str "4. Risk Manager — " (:trade-proposal/ticker p))]]
+     [:div.text-sm
+      [:span {:class (case d
+                       :approved "text-green-600 font-semibold"
+                       :rejected "text-red-600 font-semibold"
+                       "text-yellow-600 font-semibold")}
+       (string/upper-case (name (or d :unknown)))]
+      (when (:trade-proposal/quantity p) (str " · " (:trade-proposal/quantity p) " shares"))
+      (str " · " (name (or (:trade-proposal/action p) :hold)))
+      [:span.text-gray-400.ml-2 (fmt-time (:trade-proposal/proposed-at p))]]
+     [:div.text-sm.text-gray-600.mt-1 (:trade-proposal/reason p)])))
+
+(defn- order-card [o]
+  (chain-card
+   [:div.flex.items-center.gap-2.mb-1
+    (event-badge :order)
+    [:span.font-semibold (str "5. Executor — " (:order/ticker o))]]
+   [:div.text-sm.text-gray-700
+    (str (name (or (:order/side o) :buy)) " " (:order/quantity o) " shares"
+         " · " (name (or (:order/status o) :pending)))
+    [:span.text-gray-400.ml-2 (fmt-time (:order/placed-at o))]]))
+
+(defn- fill-card [f]
+  (chain-card
+   [:div.flex.items-center.gap-2.mb-1
+    (event-badge :fill)
+    [:span.font-semibold (str "6. Fill — " (:fill/ticker f))]]
+   [:div.text-sm.text-gray-700
+    (str (:fill/quantity f) " shares @ $" (format "%.2f" (double (or (:fill/price f) 0.0))))
+    [:span.text-gray-400.ml-2 (fmt-time (:fill/filled-at f))]]))
+
+(defn trade-page [{:keys [biff/db biff.xtdb/node path-params] :as ctx}]
+  (let [db          (or db (xt/db node))
+        proposal-id (try (java.util.UUID/fromString (:id path-params))
+                         (catch Exception _ nil))
+        proposal    (when proposal-id (xt/entity db proposal-id))]
+    (if (nil? proposal)
+      {:status 404 :headers {"content-type" "text/plain"} :body "Trade not found"}
+      (let [analysis  (xt/entity db (:trade-proposal/analysis-id proposal))
+            news      (when analysis (xt/entity db (:analysis/news-report-id analysis)))
+            candidate (when analysis (xt/entity db (:analysis/candidate-id analysis)))
+            news-llm  (when news     (xt/entity db (:news-report/llm-call-id news)))
+            anal-llm  (when analysis (xt/entity db (:analysis/llm-call-id analysis)))
+            order     (ffirst (q db '{:find [(pull o [*])]
+                                      :in [pid]
+                                      :where [[o :order/proposal-id pid]]}
+                                 proposal-id))
+            fill      (when order
+                        (ffirst (q db '{:find [(pull f [*])]
+                                        :in [oid]
+                                        :where [[f :fill/order-id oid]]}
+                                   (:xt/id order))))]
+        (dash-page ctx
+         (nav nil)
+         [:div.mb-4
+          [:a.text-sm.text-blue-500 {:href "/timeline"} "← Back to Timeline"]
+          [:span.text-sm.text-gray-400.ml-3
+           "Trade chain for " [:span.font-mono.font-semibold (:trade-proposal/ticker proposal)]]]
+         (when candidate  (candidate-card candidate))
+         (when news       (news-card news news-llm))
+         (when analysis   (analysis-card analysis anal-llm))
+         (proposal-card proposal)
+         (if order
+           [:<>
+            (order-card order)
+            (when fill (fill-card fill))]
+           [:div.rounded.border.border-dashed.border-gray-300.p-4.text-sm.text-gray-400
+            "No order placed (proposal rejected or executor not yet run)"]))))))
 
 (def module
-  {:routes [["/"         {:get portfolio-page}]
-            ["/timeline" {:get timeline-page}]]})
+  {:routes [["/"              {:get portfolio-page}]
+            ["/timeline"      {:get timeline-page}]
+            ["/timeline/rows" {:get timeline-rows}]
+            ["/trade/:id"     {:get trade-page}]]})
