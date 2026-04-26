@@ -533,7 +533,7 @@
                  [:div#query-result
                   [:div.text-xs.text-gray-400.mb-1 (str (:count result) " row(s)")]
                   [:pre.overflow-auto.text-xs.font-mono.bg-gray-50.rounded.border.border-gray-200.p-3
-                   {:style "max-height:60vh"} (:text result)]]
+                   {:style {:max-height "60vh"}} (:text result)]]
                  [:div#query-result
                   [:div.p-3.bg-red-50.text-red-700.rounded.text-xs.font-mono (:text result)]]))}))
 
