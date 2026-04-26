@@ -95,42 +95,6 @@
          [:td.py-2.pr-6.text-right {:class cls} (fmt-signed pl)]
          [:td.py-2.text-right {:class cls} (fmt-pct plpc)]])]]))
 
-(defn portfolio-page [{:keys [biff/db biff.xtdb/node] :as ctx}]
-  (let [db        (or db (xt/db node))
-        account   (try (alpaca/get-account)
-                       (catch Exception e
-                         (log/warn "Dashboard: Alpaca account error:" (.getMessage e))
-                         nil))
-        positions (try (alpaca/get-positions)
-                       (catch Exception e
-                         (log/warn "Dashboard: Alpaca positions error:" (.getMessage e))
-                         []))
-        settings  (risk/load-settings db)
-        last-scan (ffirst (xt/q db '{:find [(max t)] :where [[_ :candidate/scanned-at t]]}))
-        equity    (parse-d (:equity account))
-        cash      (parse-d (:cash account))
-        last-eq   (parse-d (:last_equity account))
-        pnl       (when (and equity last-eq) (- equity last-eq))]
-    (dash-page ctx
-     (nav :portfolio)
-     (if (nil? account)
-       [:div.p-3.mb-4.bg-red-50.text-red-600.rounded.text-sm
-        "Could not fetch account data from Alpaca. Check logs."]
-       [:<>
-        [:div.grid.grid-cols-2.gap-3.mb-6
-         (stat-card "Equity"       (fmt-usd equity)                            "")
-         (stat-card "Cash"         (fmt-usd cash)                              "")
-         (stat-card "Today's P&L"  (fmt-signed pnl)             (pnl-class pnl))
-         (stat-card "Buying Power" (fmt-usd (parse-d (:buying_power account))) "")]
-        [:div.mb-6
-         [:h2.text-sm.font-semibold.text-gray-700.mb-2
-          (str "Open Positions (" (count positions) ")")]
-         (positions-table positions)]
-        [:div.mb-6
-         [:div.text-xs.text-gray-400.mb-3
-          "Last scan: " (or (fmt-time last-scan) "—")]
-         (settings-widget settings)]]))))
-
 ;; --- Settings widget ---
 
 (defn- settings-widget [settings]
@@ -169,6 +133,44 @@
     {:status  200
      :headers {"content-type" "text/html; charset=utf-8"}
      :body    (rum/render-static-markup (settings-widget settings))}))
+
+;; --- Portfolio ---
+
+(defn portfolio-page [{:keys [biff/db biff.xtdb/node] :as ctx}]
+  (let [db        (or db (xt/db node))
+        account   (try (alpaca/get-account)
+                       (catch Exception e
+                         (log/warn "Dashboard: Alpaca account error:" (.getMessage e))
+                         nil))
+        positions (try (alpaca/get-positions)
+                       (catch Exception e
+                         (log/warn "Dashboard: Alpaca positions error:" (.getMessage e))
+                         []))
+        settings  (risk/load-settings db)
+        last-scan (ffirst (xt/q db '{:find [(max t)] :where [[_ :candidate/scanned-at t]]}))
+        equity    (parse-d (:equity account))
+        cash      (parse-d (:cash account))
+        last-eq   (parse-d (:last_equity account))
+        pnl       (when (and equity last-eq) (- equity last-eq))]
+    (dash-page ctx
+     (nav :portfolio)
+     (if (nil? account)
+       [:div.p-3.mb-4.bg-red-50.text-red-600.rounded.text-sm
+        "Could not fetch account data from Alpaca. Check logs."]
+       [:<>
+        [:div.grid.grid-cols-2.gap-3.mb-6
+         (stat-card "Equity"       (fmt-usd equity)                            "")
+         (stat-card "Cash"         (fmt-usd cash)                              "")
+         (stat-card "Today's P&L"  (fmt-signed pnl)             (pnl-class pnl))
+         (stat-card "Buying Power" (fmt-usd (parse-d (:buying_power account))) "")]
+        [:div.mb-6
+         [:h2.text-sm.font-semibold.text-gray-700.mb-2
+          (str "Open Positions (" (count positions) ")")]
+         (positions-table positions)]
+        [:div.mb-6
+         [:div.text-xs.text-gray-400.mb-3
+          "Last scan: " (or (fmt-time last-scan) "—")]
+         (settings-widget settings)]]))))
 
 ;; --- Timeline ---
 
@@ -488,38 +490,42 @@
 ;; --- Query page ---
 
 (def ^:private query-examples
-  [["All candidates"
-    "{:find [(pull e [*])] :where [[e :candidate/ticker]]}"]
+  [["Candidate tickers (simple)"
+    "{:find [ticker]\n :where [[e :candidate/ticker ticker]]}"]
+   ["All candidates"
+    "{:find [(pull e [:xt/id :candidate/ticker :candidate/trigger\n              :candidate/price-change-pct :candidate/volume-ratio\n              :candidate/scanned-at])]\n :where [[e :candidate/ticker]]}"]
    ["Analyses — rating ≥ 7"
-    "{:find [(pull e [*])] :where [[e :analysis/rating r] [(>= r 7)]]}"]
+    "{:find [(pull e [:xt/id :analysis/ticker :analysis/rating\n              :analysis/action :analysis/reasoning\n              :analysis/analyzed-at])]\n :where [[e :analysis/rating r] [(>= r 7)]]}"]
    ["Approved proposals"
-    "{:find [(pull p [*])] :where [[p :trade-proposal/decision :approved]]}"]
+    "{:find [(pull p [:xt/id :trade-proposal/ticker :trade-proposal/action\n              :trade-proposal/quantity :trade-proposal/decision\n              :trade-proposal/reason :trade-proposal/proposed-at])]\n :where [[p :trade-proposal/decision :approved]]}"]
    ["Resized proposals"
-    "{:find [(pull p [*])] :where [[p :trade-proposal/decision :resized]]}"]
+    "{:find [(pull p [:xt/id :trade-proposal/ticker :trade-proposal/quantity\n              :trade-proposal/reason :trade-proposal/proposed-at])]\n :where [[p :trade-proposal/decision :resized]]}"]
    ["All orders"
-    "{:find [(pull o [*])] :where [[o :order/ticker]]}"]
+    "{:find [(pull o [:xt/id :order/ticker :order/side :order/quantity\n              :order/status :order/placed-at])]\n :where [[o :order/ticker]]}"]
    ["All fills"
-    "{:find [(pull f [*])] :where [[f :fill/ticker]]}"]
+    "{:find [(pull f [:xt/id :fill/ticker :fill/quantity :fill/price :fill/filled-at])]\n :where [[f :fill/ticker]]}"]
    ["All LLM calls"
-    "{:find [(pull l [*])] :where [[l :llm-call/model]]}"]
-   ["News — negative sentiment (< 0)"
-    "{:find [(pull n [*])] :where [[n :news-report/sentiment s] [(< s 0)]]}"]
+    "{:find [(pull l [:xt/id :llm-call/model :llm-call/input-tokens\n              :llm-call/output-tokens :llm-call/latency-ms\n              :llm-call/called-at])]\n :where [[l :llm-call/model]]}"]
+   ["News — negative sentiment"
+    "{:find [(pull n [:xt/id :news-report/ticker :news-report/sentiment\n              :news-report/summary :news-report/reported-at])]\n :where [[n :news-report/sentiment s] [(< s 0)]]}"]
    ["Pipeline join: ticker + action + decision"
-    "{:find [ticker action decision] :where [[c :candidate/ticker ticker] [n :news-report/candidate-id (:xt/id c)] [a :analysis/candidate-id (:xt/id c)] [a :analysis/action action] [p :trade-proposal/analysis-id (:xt/id a)] [p :trade-proposal/decision decision]]}"]
+    "{:find [ticker action decision]\n :where [[c :candidate/ticker ticker]\n         [a :analysis/candidate-id (:xt/id c)]\n         [a :analysis/action action]\n         [p :trade-proposal/analysis-id (:xt/id a)]\n         [p :trade-proposal/decision decision]]}"]
    ["Settings document"
-    "{:find [(pull s [*])] :where [[s :settings/max-trades-per-day]]}"]])
+    "{:find [(pull s [:xt/id :settings/max-trades-enabled :settings/max-trades-per-day])]\n :where [[s :settings/max-trades-per-day]]}"]])
 
-(defn run-query [{:keys [biff.xtdb/node params] :as _ctx}]
-  (let [db     (xt/db node)
+(defn run-query [{:keys [biff/db biff.xtdb/node params] :as _ctx}]
+  (let [db     (or db (xt/db node))
         raw    (str (:query params))
         result (try
                  (let [parsed (edn/read-string raw)
-                       rows   (xt/q db parsed)
+                       rows   (vec (q db parsed))
                        sw     (java.io.StringWriter.)]
                    (pprint/pprint rows sw)
                    {:ok true :text (.toString sw) :count (count rows)})
                  (catch Exception e
-                   {:ok false :text (.getMessage e)}))]
+                   (log/error e "Query page: error executing query")
+                   {:ok false :text (str (or (.getMessage e) (.getSimpleName (class e)))
+                                         "\n\nQuery was:\n" raw)}))]
     {:status  200
      :headers {"content-type" "text/html; charset=utf-8"}
      :body    (rum/render-static-markup
