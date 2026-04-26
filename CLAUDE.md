@@ -43,7 +43,36 @@ Clojure + Biff framework (XTDB bitemporal DB, HTMX dashboard) · Podman containe
 
 ## Commands
 
-_To be filled in once `deps.edn` and `Containerfile` exist._
+**Start the app**
+```
+./ops/dev.sh          # loads ~/fund/.env, starts Biff on :8080 with nREPL on :7888
+```
+
+**Pipeline agents** (each writes to XTDB)
+```
+bb scan               # [Alpaca]        discover movers/actives, write :candidate
+bb news               # [Alpaca + LLM]  fetch headlines, score sentiment, write :news-report
+bb analyse            # [LLM]           rate candidates 1–10, write :analysis
+bb risk               # [Alpaca]        apply hard rules, write :trade-proposal
+bb execute            # [Alpaca]        place orders, reconcile fills, write :order + :fill
+bb pipeline           # [Alpaca + LLM]  full pipeline: scan → news → analyse → risk → execute
+```
+
+**Queries** (read-only, no remote calls)
+```
+bb reports            # all :news-report entries — ticker, sentiment, summary
+bb analyses           # all :analysis entries — ticker, rating, action, reasoning
+bb proposals          # all :trade-proposal entries — ticker, action, decision, reason
+```
+
+**Portfolio**
+```
+bb sector-exposure    # [Alpaca] live sector breakdown — market value + % of equity
+```
+
+```
+bb help               # full task list with remote-call profiles
+```
 
 ## Documentation
 
