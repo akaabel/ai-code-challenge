@@ -1,8 +1,10 @@
 (ns com.robotfund.dashboard
   (:require [clojure.string :as string]
             [clojure.tools.logging :as log]
-            [com.biffweb :refer [q]]
+            [com.biffweb :as biff :refer [q]]
             [com.robotfund.alpaca :as alpaca]
+            [com.robotfund.agents.risk :as risk]
+            [com.robotfund.schema :as schema]
             [com.robotfund.ui :as ui]
             [rum.core :as rum]
             [xtdb.api :as xt])
@@ -98,6 +100,7 @@
                        (catch Exception e
                          (log/warn "Dashboard: Alpaca positions error:" (.getMessage e))
                          []))
+        settings  (risk/load-settings db)
         last-scan (ffirst (xt/q db '{:find [(max t)] :where [[_ :candidate/scanned-at t]]}))
         equity    (parse-d (:equity account))
         cash      (parse-d (:cash account))
@@ -118,8 +121,49 @@
          [:h2.text-sm.font-semibold.text-gray-700.mb-2
           (str "Open Positions (" (count positions) ")")]
          (positions-table positions)]
-        [:div.text-xs.text-gray-400
-         "Last scan: " (or (fmt-time last-scan) "—")]]))))
+        [:div.mb-6
+         [:div.text-xs.text-gray-400.mb-3
+          "Last scan: " (or (fmt-time last-scan) "—")]
+         (settings-widget settings)]]))))
+
+;; --- Settings widget ---
+
+(defn- settings-widget [settings]
+  (let [enabled (:settings/max-trades-enabled settings)
+        max-n   (:settings/max-trades-per-day settings)]
+    [:div#risk-settings.bg-white.rounded.border.border-gray-200.p-4
+     [:div.text-xs.text-gray-500.uppercase.tracking-wide.mb-3 "Risk Settings"]
+     (biff/form
+      {:action  "/settings/max-trades"
+       :hx-post "/settings/max-trades"
+       :hx-target "#risk-settings"
+       :hx-swap "outerHTML"}
+      [:div.flex.items-center.gap-4.flex-wrap
+       [:label.flex.items-center.gap-2.text-sm.text-gray-700.cursor-pointer
+        [:input.rounded.border-gray-300
+         (cond-> {:type "checkbox" :name "enabled" :value "true"}
+           enabled (assoc :checked true))]
+        "Limit max trades per day"]
+       [:div.flex.items-center.gap-2
+        [:span.text-sm.text-gray-500 "Max:"]
+        [:input.w-20.rounded.border.border-gray-300.px-2.py-1.text-sm.text-right
+         {:type "number" :name "max-trades" :min "1" :max "100" :value (str max-n)}]]
+       [:button.bg-blue-500.text-white.text-sm.px-3.py-1.rounded
+        {:type "submit"} "Save"]])]))
+
+(defn save-max-trades [{:keys [biff.xtdb/node params] :as _ctx}]
+  (let [enabled  (= "true" (:enabled params))
+        max-n    (max 1 (try (Integer/parseInt (str (:max-trades params)))
+                             (catch Exception _ 5)))
+        settings (merge risk/default-settings
+                        {:xt/id                       :robotfund/settings
+                         :settings/max-trades-enabled enabled
+                         :settings/max-trades-per-day max-n})]
+    (schema/validate! :settings settings)
+    (xt/await-tx node (xt/submit-tx node [[::xt/put settings]]))
+    {:status  200
+     :headers {"content-type" "text/html; charset=utf-8"}
+     :body    (rum/render-static-markup (settings-widget settings))}))
 
 ;; --- Timeline ---
 
@@ -437,9 +481,10 @@
          [:<> (map #(trade-row % costs) fills)])]])))
 
 (def module
-  {:routes [["/"              {:get portfolio-page}]
-            ["/trades"        {:get trades-page}]
-            ["/trades/rows"   {:get trades-rows}]
-            ["/timeline"      {:get timeline-page}]
-            ["/timeline/rows" {:get timeline-rows}]
-            ["/trade/:id"     {:get trade-page}]]})
+  {:routes [["/"                    {:get  portfolio-page}]
+            ["/trades"              {:get  trades-page}]
+            ["/trades/rows"         {:get  trades-rows}]
+            ["/timeline"            {:get  timeline-page}]
+            ["/timeline/rows"       {:get  timeline-rows}]
+            ["/trade/:id"           {:get  trade-page}]
+            ["/settings/max-trades" {:post save-max-trades}]]})

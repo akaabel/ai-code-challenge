@@ -110,7 +110,13 @@
           [:fill/ticker    :string]
           [:fill/quantity  pos-int?]
           [:fill/price     pos?]
-          [:fill/filled-at inst?]]})
+          [:fill/filled-at inst?]]
+
+   ;; Runtime-configurable risk settings (singleton, :xt/id = :robotfund/settings)
+   :settings [:map {:closed true}
+              [:xt/id                       keyword?]
+              [:settings/max-trades-enabled boolean?]
+              [:settings/max-trades-per-day pos-int?]]})
 
 (defn validate!
   "Throws ex-info with humanized errors when value does not conform to schema-key."

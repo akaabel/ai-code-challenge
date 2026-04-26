@@ -15,11 +15,17 @@
    "V"     :financials
    "UNH"   :healthcare})
 
-(def ^:private max-position-pct   0.10)
-(def ^:private max-sector-pct     0.30)
-(def ^:private max-trades-per-day 5)
-(def ^:private min-buy-rating     7)
-(def ^:private max-sell-rating    3)
+(def ^:private max-position-pct 0.10)
+(def ^:private max-sector-pct   0.30)
+(def ^:private min-buy-rating   7)
+(def ^:private max-sell-rating  3)
+
+(def default-settings
+  {:settings/max-trades-enabled true
+   :settings/max-trades-per-day 5})
+
+(defn load-settings [db]
+  (or (xt/entity db :robotfund/settings) default-settings))
 
 (defn- start-of-today-et []
   (-> (java.time.ZonedDateTime/now (java.time.ZoneId/of "America/New_York"))
@@ -60,12 +66,14 @@
        (map #(or (parse-d (:market_value %)) 0.0))
        (reduce + 0.0)))
 
-(defn- evaluate [analysis account positions trades-today]
-  (let [ticker (:analysis/ticker analysis)
-        rating (:analysis/rating analysis)
-        action (:analysis/action analysis)
-        equity (parse-d (:equity account))
-        pos    (position-for positions ticker)]
+(defn- evaluate [analysis account positions trades-today settings]
+  (let [ticker      (:analysis/ticker analysis)
+        rating      (:analysis/rating analysis)
+        action      (:analysis/action analysis)
+        equity      (parse-d (:equity account))
+        pos         (position-for positions ticker)
+        max-daily   (:settings/max-trades-per-day settings)
+        daily-limit (:settings/max-trades-enabled settings)]
     (cond
       (= action :hold)
       {:decision :rejected :reason "action is hold — no trade required"}
@@ -73,8 +81,8 @@
       (and (= action :buy) (< rating min-buy-rating))
       {:decision :rejected :reason (str "rating " rating " below buy threshold " min-buy-rating)}
 
-      (and (= action :buy) (>= trades-today max-trades-per-day))
-      {:decision :rejected :reason (str "daily trade limit of " max-trades-per-day " reached")}
+      (and (= action :buy) daily-limit (>= trades-today max-daily))
+      {:decision :rejected :reason (str "daily trade limit of " max-daily " reached")}
 
       (= action :buy)
       (let [price         (latest-price ticker)
@@ -119,10 +127,10 @@
       :else
       {:decision :rejected :reason "unrecognised action"})))
 
-(defn- process-analysis [ctx analysis account positions trades-today-atom]
+(defn- process-analysis [ctx analysis account positions trades-today-atom settings]
   (let [ticker   (:analysis/ticker analysis)
         action   (:analysis/action analysis)
-        ruling   (evaluate analysis account positions @trades-today-atom)
+        ruling   (evaluate analysis account positions @trades-today-atom settings)
         proposal (cond-> {:xt/id                     (random-uuid)
                           :trade-proposal/analysis-id (:xt/id analysis)
                           :trade-proposal/ticker      ticker
@@ -144,19 +152,24 @@
 (defn run-risk
   "Evaluates each unproposed :analysis against hard Clojure rules (no LLM).
    Rules: min buy rating 7, max sell rating 3, max 10% per position,
-   max 30% per sector, max 5 trades/day, never short.
+   max 30% per sector, configurable max trades/day, never short.
    Writes :trade-proposal to XTDB. Returns count of proposals written."
   [ctx]
   (let [node         (:biff.xtdb/node ctx)
         db           (xt/db node)
+        settings     (load-settings db)
         analyses     (unproposed-analyses db)
         account      (alpaca/get-account)
         positions    (alpaca/get-positions)
         trades-today (atom (todays-approved-count db))]
+    (println (str "Risk: max-trades-per-day "
+                  (if (:settings/max-trades-enabled settings)
+                    (str "ENABLED (" (:settings/max-trades-per-day settings) ")")
+                    "DISABLED")))
     (reduce
      (fn [total analysis]
        (try
-         (process-analysis ctx analysis account positions trades-today)
+         (process-analysis ctx analysis account positions trades-today settings)
          (inc total)
          (catch Exception e
            (println (str "Risk error [" (:analysis/ticker analysis) "]: " (.getMessage e)))
