@@ -1,5 +1,7 @@
 (ns com.robotfund.dashboard
-  (:require [clojure.string :as string]
+  (:require [clojure.edn :as edn]
+            [clojure.pprint :as pprint]
+            [clojure.string :as string]
             [clojure.tools.logging :as log]
             [com.biffweb :as biff :refer [q]]
             [com.robotfund.alpaca :as alpaca]
@@ -58,7 +60,10 @@
      "Trades"]
     [:a {:href  "/timeline"
          :class (if (= active :timeline) "font-semibold text-blue-600" "text-gray-600 hover:text-blue-500")}
-     "Timeline"]]])
+     "Timeline"]
+    [:a {:href  "/query"
+         :class (if (= active :query) "font-semibold text-blue-600" "text-gray-600 hover:text-blue-500")}
+     "Query"]]])
 
 ;; --- Portfolio ---
 
@@ -480,6 +485,79 @@
                "No trades executed yet."]]
          [:<> (map #(trade-row % costs) fills)])]])))
 
+;; --- Query page ---
+
+(def ^:private query-examples
+  [["All candidates"
+    "{:find [(pull e [*])] :where [[e :candidate/ticker]]}"]
+   ["Analyses — rating ≥ 7"
+    "{:find [(pull e [*])] :where [[e :analysis/rating r] [(>= r 7)]]}"]
+   ["Approved proposals"
+    "{:find [(pull p [*])] :where [[p :trade-proposal/decision :approved]]}"]
+   ["Resized proposals"
+    "{:find [(pull p [*])] :where [[p :trade-proposal/decision :resized]]}"]
+   ["All orders"
+    "{:find [(pull o [*])] :where [[o :order/ticker]]}"]
+   ["All fills"
+    "{:find [(pull f [*])] :where [[f :fill/ticker]]}"]
+   ["All LLM calls"
+    "{:find [(pull l [*])] :where [[l :llm-call/model]]}"]
+   ["News — negative sentiment (< 0)"
+    "{:find [(pull n [*])] :where [[n :news-report/sentiment s] [(< s 0)]]}"]
+   ["Pipeline join: ticker + action + decision"
+    "{:find [ticker action decision] :where [[c :candidate/ticker ticker] [n :news-report/candidate-id (:xt/id c)] [a :analysis/candidate-id (:xt/id c)] [a :analysis/action action] [p :trade-proposal/analysis-id (:xt/id a)] [p :trade-proposal/decision decision]]}"]
+   ["Settings document"
+    "{:find [(pull s [*])] :where [[s :settings/max-trades-per-day]]}"]])
+
+(defn run-query [{:keys [biff.xtdb/node params] :as _ctx}]
+  (let [db     (xt/db node)
+        raw    (str (:query params))
+        result (try
+                 (let [parsed (edn/read-string raw)
+                       rows   (xt/q db parsed)
+                       sw     (java.io.StringWriter.)]
+                   (pprint/pprint rows sw)
+                   {:ok true :text (.toString sw) :count (count rows)})
+                 (catch Exception e
+                   {:ok false :text (.getMessage e)}))]
+    {:status  200
+     :headers {"content-type" "text/html; charset=utf-8"}
+     :body    (rum/render-static-markup
+               (if (:ok result)
+                 [:div#query-result
+                  [:div.text-xs.text-gray-400.mb-1 (str (:count result) " row(s)")]
+                  [:pre.overflow-auto.text-xs.font-mono.bg-gray-50.rounded.border.border-gray-200.p-3
+                   {:style "max-height:60vh"} (:text result)]]
+                 [:div#query-result
+                  [:div.p-3.bg-red-50.text-red-700.rounded.text-xs.font-mono (:text result)]]))}))
+
+(defn query-page [{:keys [biff/db biff.xtdb/node] :as ctx}]
+  (let [_db (or db (xt/db node))]
+    (dash-page ctx
+     (nav :query)
+     [:div.mb-2
+      [:h2.text-sm.font-semibold.text-gray-700 "XTDB Query Playground"]]
+     [:div.mb-4
+      [:label.text-xs.text-gray-500.block.mb-1 "Example queries"]
+      [:select#query-select.w-full.rounded.border.border-gray-300.px-3.py-2.text-sm
+       {:_ "on change set #query-input.value to my value then set my value to ''"}
+       [:option {:value ""} "— pick an example —"]
+       (for [[label q-str] query-examples]
+         [:option {:value q-str} label])]]
+     (biff/form
+      {:action  "/query/run"
+       :hx-post "/query/run"
+       :hx-target "#query-result"
+       :hx-swap "outerHTML"}
+      [:div.mb-3
+       [:label.text-xs.text-gray-500.block.mb-1 "Datalog query (EDN)"]
+       [:textarea#query-input.w-full.rounded.border.border-gray-300.px-3.py-2.text-sm.font-mono
+        {:name "query" :rows "6"
+         :placeholder "{:find [(pull e [*])] :where [[e :candidate/ticker]]}"}]]
+      [:button.bg-blue-500.text-white.text-sm.px-4.py-1.5.rounded
+       {:type "submit"} "Run"])
+     [:div#query-result])))
+
 (def module
   {:routes [["/"                    {:get  portfolio-page}]
             ["/trades"              {:get  trades-page}]
@@ -487,4 +565,6 @@
             ["/timeline"            {:get  timeline-page}]
             ["/timeline/rows"       {:get  timeline-rows}]
             ["/trade/:id"           {:get  trade-page}]
-            ["/settings/max-trades" {:post save-max-trades}]]})
+            ["/settings/max-trades" {:post save-max-trades}]
+            ["/query"               {:get  query-page}]
+            ["/query/run"           {:post run-query}]]})
