@@ -51,6 +51,9 @@
     [:a {:href  "/"
          :class (if (= active :portfolio) "font-semibold text-blue-600" "text-gray-600 hover:text-blue-500")}
      "Portfolio"]
+    [:a {:href  "/trades"
+         :class (if (= active :trades) "font-semibold text-blue-600" "text-gray-600 hover:text-blue-500")}
+     "Trades"]
     [:a {:href  "/timeline"
          :class (if (= active :timeline) "font-semibold text-blue-600" "text-gray-600 hover:text-blue-500")}
      "Timeline"]]])
@@ -345,8 +348,98 @@
            [:div.rounded.border.border-dashed.border-gray-300.p-4.text-sm.text-gray-400
             "No order placed (proposal rejected or executor not yet run)"]))))))
 
+;; --- Trades page ---
+
+(defn- fills-with-side [db]
+  (->> (q db '{:find [(pull f [*])] :where [[f :fill/ticker]]})
+       (map first)
+       (map (fn [fill]
+              (let [order (xt/entity db (:fill/order-id fill))]
+                (assoc fill :fill/side (:order/side order)))))
+       (sort-by :fill/filled-at #(compare %2 %1))))
+
+(defn- avg-cost-by-ticker
+  "Average cost per share for each ticker, computed from all buy fills."
+  [fills]
+  (->> fills
+       (filter #(= :buy (:fill/side %)))
+       (group-by :fill/ticker)
+       (into {} (map (fn [[ticker buys]]
+                       (let [total-qty  (reduce + 0 (map :fill/quantity buys))
+                             total-cost (reduce + 0.0 (map #(* (:fill/quantity %) (double (:fill/price %))) buys))]
+                         [ticker (if (pos? total-qty) (/ total-cost total-qty) 0.0)]))))))
+
+(defn- trade-row [fill avg-cost]
+  (let [side    (:fill/side fill)
+        qty     (:fill/quantity fill)
+        price   (double (:fill/price fill))
+        value   (* qty price)
+        cost    (get avg-cost (:fill/ticker fill) price)
+        pnl     (when (= side :sell) (* qty (- price (double cost))))
+        pnl-cls (when pnl (pnl-class pnl))]
+    [:tr.border-b.border-gray-100
+     [:td.py-2.pr-6.text-xs.font-mono.text-gray-400 (fmt-time (:fill/filled-at fill))]
+     [:td.py-2.pr-6.font-mono.font-semibold (:fill/ticker fill)]
+     [:td.py-2.pr-6
+      [:span.inline-block.px-2.rounded.text-xs.font-medium
+       {:class (if (= side :buy) "bg-green-100 text-green-700" "bg-red-100 text-red-700")}
+       (string/upper-case (name side))]]
+     [:td.py-2.pr-6.text-right (str qty)]
+     [:td.py-2.pr-6.text-right (format "$%.2f" price)]
+     [:td.py-2.pr-6.text-right (fmt-usd value)]
+     [:td.py-2.text-right {:class (or pnl-cls "text-gray-400")}
+      (if pnl (fmt-signed pnl) "—")]]))
+
+(defn trades-rows [{:keys [biff/db biff.xtdb/node] :as _ctx}]
+  (let [db    (or db (xt/db node))
+        fills (fills-with-side db)
+        costs (avg-cost-by-ticker fills)]
+    {:status  200
+     :headers {"content-type" "text/html; charset=utf-8"}
+     :body    (rum/render-static-markup
+               (if (empty? fills)
+                 [:tr [:td.py-4.text-sm.text-gray-500.text-center {:col-span "7"}
+                       "No trades executed yet."]]
+                 [:<> (map #(trade-row % costs) fills)]))}))
+
+(defn trades-page [{:keys [biff/db biff.xtdb/node] :as ctx}]
+  (let [db        (or db (xt/db node))
+        positions (try (alpaca/get-positions)
+                       (catch Exception e
+                         (log/warn "Trades: Alpaca positions error:" (.getMessage e))
+                         []))
+        fills     (fills-with-side db)
+        costs     (avg-cost-by-ticker fills)]
+    (dash-page ctx
+     (nav :trades)
+     [:div.mb-8
+      [:h2.text-sm.font-semibold.text-gray-700.mb-2
+       (str "Open Positions (" (count positions) ")")]
+      (positions-table positions)]
+     [:div.flex.items-center.justify-between.mb-3
+      [:h2.text-sm.font-semibold.text-gray-700 "Trade History"]
+      [:span.text-xs.text-gray-400 "Refreshes every 5s · P&L on sells uses average cost basis"]]
+     [:table.w-full.text-sm
+      [:thead
+       [:tr.text-left.text-xs.text-gray-500.uppercase.border-b.border-gray-200
+        [:th.py-2.pr-6 "Time (ET)"]
+        [:th.py-2.pr-6 "Ticker"]
+        [:th.py-2.pr-6 "Side"]
+        [:th.py-2.pr-6.text-right "Qty"]
+        [:th.py-2.pr-6.text-right "Price"]
+        [:th.py-2.pr-6.text-right "Value"]
+        [:th.py-2.text-right "P&L"]]]
+      [:tbody#trades-rows
+       {:hx-get "/trades/rows" :hx-trigger "load, every 5s" :hx-swap "innerHTML"}
+       (if (empty? fills)
+         [:tr [:td.py-4.text-sm.text-gray-500.text-center {:col-span "7"}
+               "No trades executed yet."]]
+         [:<> (map #(trade-row % costs) fills)])]])))
+
 (def module
   {:routes [["/"              {:get portfolio-page}]
+            ["/trades"        {:get trades-page}]
+            ["/trades/rows"   {:get trades-rows}]
             ["/timeline"      {:get timeline-page}]
             ["/timeline/rows" {:get timeline-rows}]
             ["/trade/:id"     {:get trade-page}]]})
