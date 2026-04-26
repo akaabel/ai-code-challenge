@@ -348,6 +348,7 @@ Not yet detailed — will plan once we see how the trading week goes. Likely sha
 
 Newest on top.
 
+- 2026-04-26 — Step 13 revisited: replaced SSE live-push with HTMX polling (`hx-trigger="load, every 3s"` on the timeline tbody). SSE never delivered events to the browser — PipedInputStream body → ring's `io/copy` → Jetty's HttpOutput buffer with no per-write flush, so 24-byte event frames sat buffered indefinitely. Drops ~70 lines (sse-handler, notify-dashboard, push-to-clients, keepalive task, dashboard-clients atom) for a single hx-trigger attribute
 - 2026-04-23 — Step 13 done: WS live updates on /timeline (on-tx broadcasts new rows via hx-swap-oob); /trade/:id drilldown shows full candidate→news→analysis→proposal→order→fill chain with expandable LLM prompt/response via <details>; "view →" links on RISK/ORDER rows in timeline; dashboard-clients atom wired to initial-system
 - 2026-04-23 — Step 12 done: dashboard.clj with / (portfolio: equity/cash/P&L/positions from Alpaca, last scan time) and /timeline (last 100 XTDB events, all 6 agent types, newest first); home / route moved to /login to free root path
 - 2026-04-23 — Step 11 done: schedule.clj with market-hours guard (ET, 09:30–16:00, M–F, 2026 NYSE holidays), five agent tasks staggered at +0/+2/+5/+7/+10 min within 15-min cycle; pure java.time, no extra deps
