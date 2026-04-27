@@ -134,18 +134,25 @@
       (println (str "Executor: recovering fills for " (count orphans) " orphaned order(s)"))
       (try
         (let [activities  (alpaca/get-fill-activities)
-              by-order-id (group-by :order_id activities)]
+              by-order-id (group-by :order_id activities)
+              positions   (into {} (map (juxt :symbol identity) (alpaca/get-positions)))]
           (doseq [order orphans]
-            (let [acts (get by-order-id (:order/alpaca-id order))]
-              (if (seq acts)
-                (let [act  (first acts)
-                      resp {:filled_qty       (:qty act)
-                            :filled_avg_price (:price act)}]
-                  (println (str "Executor: orphan recovery [" (:order/ticker order)
-                                "] activity qty=" (:qty act) " price=" (:price act)))
-                  (write-fill! ctx order resp))
-                (println (str "Executor: no activity found for orphaned order ["
-                              (:order/ticker order) "] alpaca-id=" (:order/alpaca-id order)))))))
+            (let [ticker (:order/ticker order)
+                  acts   (get by-order-id (:order/alpaca-id order))]
+              (cond
+                (seq acts)
+                (let [act (first acts)]
+                  (println (str "Executor: orphan [" ticker "] via activity price=" (:price act)))
+                  (write-fill! ctx order {:filled_qty (:qty act) :filled_avg_price (:price act)}))
+
+                (get positions ticker)
+                (let [pos (get positions ticker)]
+                  (println (str "Executor: orphan [" ticker "] via position avg_entry_price=" (:avg_entry_price pos)))
+                  (write-fill! ctx order {:filled_qty       (str (:order/quantity order))
+                                          :filled_avg_price (:avg_entry_price pos)}))
+
+                :else
+                (println (str "Executor: cannot recover fill — no activity or position for [" ticker "]"))))))
         (catch Exception e
           (println (str "Executor: orphan recovery error: " (.getMessage e))))))))
 
@@ -179,16 +186,22 @@
   ;; Run full executor cycle (reconcile pending + place new orders)
   (run-executor ctx)
 
-  ;; All orders
+  ;; All orders — check status of each (look for :filled with no fill entry)
   (xt/q (xt/db (:biff.xtdb/node ctx))
         '{:find  [(pull o [:order/ticker :order/side :order/quantity
                            :order/status :order/alpaca-id])]
           :where [[o :order/ticker]]})
 
+  ;; Orphaned orders — :filled status but no fill entity
+  (orphaned-filled-orders (xt/db (:biff.xtdb/node ctx)))
+
   ;; All fills
   (xt/q (xt/db (:biff.xtdb/node ctx))
         '{:find  [(pull f [*])]
           :where [[f :fill/ticker]]})
+
+  ;; What Alpaca fill activities exist?
+  (com.robotfund.alpaca/get-fill-activities)
 
   ;; Full chain: proposal → order → fill
   (xt/q (xt/db (:biff.xtdb/node ctx))
