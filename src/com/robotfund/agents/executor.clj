@@ -79,11 +79,16 @@
     (doseq [order orders]
       (try
         (if (.before (:order/placed-at order) stale-t)
-          (do
-            (alpaca/cancel-order (:order/alpaca-id order))
-            (xt/await-tx (:biff.xtdb/node ctx)
-                         (update-order-status! ctx order :cancelled))
-            (println (str "Executor: cancelled stale order " (:order/ticker order))))
+          (let [alpaca-resp (alpaca/get-order (:order/alpaca-id order))]
+            (if (= "filled" (:status alpaca-resp))
+              (do
+                (println (str "Executor: stale order already filled — reconciling " (:order/ticker order)))
+                (reconcile-order! ctx order))
+              (do
+                (alpaca/cancel-order (:order/alpaca-id order))
+                (xt/await-tx (:biff.xtdb/node ctx)
+                             (update-order-status! ctx order :cancelled))
+                (println (str "Executor: cancelled stale order " (:order/ticker order))))))
           (reconcile-order! ctx order))
         (catch Exception e
           (println (str "Executor: reconcile error [" (:order/ticker order) "]: "
@@ -127,32 +132,52 @@
                                :where [[o :order/status :filled]]}))
          (remove #(filled-order-ids (:xt/id %))))))
 
+(defn- cancelled-orders-without-fills [db]
+  (let [filled-order-ids (set (map first (xt/q db '{:find [o]
+                                                    :where [[_ :fill/order-id o]]})))]
+    (->> (map first (xt/q db '{:find  [(pull o [*])]
+                               :where [[o :order/status :cancelled]]}))
+         (remove #(filled-order-ids (:xt/id %))))))
+
+(defn- recover-fill-for-order! [ctx order activities-by-id positions]
+  (let [ticker (:order/ticker order)
+        acts   (get activities-by-id (:order/alpaca-id order))]
+    (cond
+      (seq acts)
+      (let [act (first acts)]
+        (println (str "Executor: recover fill [" ticker "] via activity price=" (:price act)))
+        (write-fill! ctx order {:filled_qty (:qty act) :filled_avg_price (:price act)}))
+
+      (get positions ticker)
+      (let [pos (get positions ticker)]
+        (println (str "Executor: recover fill [" ticker "] via position avg_entry_price=" (:avg_entry_price pos)))
+        (write-fill! ctx order {:filled_qty       (str (:order/quantity order))
+                                :filled_avg_price (:avg_entry_price pos)}))
+
+      :else
+      (println (str "Executor: cannot recover fill — no activity or position for [" ticker "]")))))
+
 (defn- recover-orphaned-fills! [ctx]
-  (let [db      (xt/db (:biff.xtdb/node ctx))
-        orphans (orphaned-filled-orders db)]
-    (when (seq orphans)
-      (println (str "Executor: recovering fills for " (count orphans) " orphaned order(s)"))
+  (let [db              (xt/db (:biff.xtdb/node ctx))
+        filled-orphans  (orphaned-filled-orders db)
+        ;; cancelled orders where position still exists are stale-cancel false positives
+        cancelled-orphans (cancelled-orders-without-fills db)]
+    (when (or (seq filled-orphans) (seq cancelled-orphans))
+      (println (str "Executor: recovering fills — "
+                    (count filled-orphans) " filled-orphan(s), "
+                    (count cancelled-orphans) " cancelled-orphan(s)"))
       (try
         (let [activities  (alpaca/get-fill-activities)
               by-order-id (group-by :order_id activities)
               positions   (into {} (map (juxt :symbol identity) (alpaca/get-positions)))]
-          (doseq [order orphans]
-            (let [ticker (:order/ticker order)
-                  acts   (get by-order-id (:order/alpaca-id order))]
-              (cond
-                (seq acts)
-                (let [act (first acts)]
-                  (println (str "Executor: orphan [" ticker "] via activity price=" (:price act)))
-                  (write-fill! ctx order {:filled_qty (:qty act) :filled_avg_price (:price act)}))
-
-                (get positions ticker)
-                (let [pos (get positions ticker)]
-                  (println (str "Executor: orphan [" ticker "] via position avg_entry_price=" (:avg_entry_price pos)))
-                  (write-fill! ctx order {:filled_qty       (str (:order/quantity order))
-                                          :filled_avg_price (:avg_entry_price pos)}))
-
-                :else
-                (println (str "Executor: cannot recover fill — no activity or position for [" ticker "]"))))))
+          (doseq [order filled-orphans]
+            (recover-fill-for-order! ctx order by-order-id positions))
+          (doseq [order cancelled-orphans]
+            (when (get positions (:order/ticker order))
+              ;; Position exists → order was actually filled; correct the status first
+              (xt/await-tx (:biff.xtdb/node ctx)
+                           (update-order-status! ctx order :filled))
+              (recover-fill-for-order! ctx order by-order-id positions))))
         (catch Exception e
           (println (str "Executor: orphan recovery error: " (.getMessage e))))))))
 
