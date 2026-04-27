@@ -1,7 +1,25 @@
 {:paths ["ops"]
 
  :tasks
- {:requires ([nrepl-eval :refer [nrepl-eval print-result]])
+ {:requires ([nrepl-eval :refer [nrepl-eval print-result]]
+             [babashka.process :refer [shell]])
+
+  build
+  {:doc "Build the robotfund container image (tag: robotfund:latest)"
+   :task (shell "podman build -t robotfund .")}
+
+  run
+  {:doc "Run the robotfund container — reads ~/fund/.env, mounts ~/fund/xtdb-data"
+   :task (let [home (System/getProperty "user.home")]
+           (shell "podman" "run" "-d" "--name" "robotfund"
+                  "--env-file" (str home "/fund/.env")
+                  "-p" "8080:8080"
+                  "-v" (str home "/fund/xtdb-data:/data/xtdb:Z")
+                  "robotfund:latest"))}
+
+  stop
+  {:doc "Stop and remove the robotfund container"
+   :task (shell "podman" "rm" "-f" "robotfund")}
 
   help
   {:doc "List all tasks with their remote-call profile (LLM / Alpaca / local)"
@@ -9,6 +27,11 @@
    :task (do
            (println)
            (println "Available bb tasks")
+           (println)
+           (println "CONTAINER")
+           (println "  bb build            Build the robotfund container image (tag: robotfund:latest)")
+           (println "  bb run              Run the container — reads ~/fund/.env, mounts ~/fund/xtdb-data")
+           (println "  bb stop             Stop and remove the running container")
            (println)
            (println "PIPELINE AGENTS  (each writes results to XTDB)")
            (println "  bb scan             [Alpaca]        Discover today's movers + most-actives via Alpaca screener,")

@@ -65,6 +65,11 @@
                {:headers           (auth-headers)
                 :throw-exceptions  false}))
 
+(defn get-open-orders
+  "Returns all currently open (not yet filled/cancelled) orders."
+  []
+  (get* trading-url "/orders" {:status "open"}))
+
 (defn get-movers
   "Returns top gainers and losers for US equities.
    opts: :top (default 20, max 25).

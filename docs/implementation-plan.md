@@ -257,7 +257,7 @@ This document is **living** — we update it as we learn, reorder steps if somet
 
 ---
 
-## Step 14 — Containerize `[ ]`
+## Step 14 — Containerize `[x]`
 
 **Goal:** Runs in Podman exactly like on the host.
 
@@ -347,6 +347,8 @@ Not yet detailed — will plan once we see how the trading week goes. Likely sha
 ## Living status log
 
 Newest on top.
+
+- 2026-04-27 — Step 14 done: Containerfile (multi-stage clojure builder → eclipse-temurin JRE), build.clj (tools.build uber), `:build` alias in deps.edn; config.edn prod overrides (XTDB dir → /data/xtdb, host → 0.0.0.0, nREPL args without cider); bb tasks build/run/stop
 
 - 2026-04-26 — Step 13 revisited: replaced SSE live-push with HTMX polling (`hx-trigger="load, every 3s"` on the timeline tbody). SSE never delivered events to the browser — PipedInputStream body → ring's `io/copy` → Jetty's HttpOutput buffer with no per-write flush, so 24-byte event frames sat buffered indefinitely. Drops ~70 lines (sse-handler, notify-dashboard, push-to-clients, keepalive task, dashboard-clients atom) for a single hx-trigger attribute
 - 2026-04-23 — Step 13 done: WS live updates on /timeline (on-tx broadcasts new rows via hx-swap-oob); /trade/:id drilldown shows full candidate→news→analysis→proposal→order→fill chain with expandable LLM prompt/response via <details>; "view →" links on RISK/ORDER rows in timeline; dashboard-clients atom wired to initial-system

@@ -19,4 +19,6 @@
   :prod {:jvm-opts ["-XX:-OmitStackTraceInFastThrow"
                     "-XX:+CrashOnOutOfMemoryError"
                     "-Dbiff.env.BIFF_PROFILE=prod"]
-         :main-opts ["-m" "com.robotfund"]}}}
+         :main-opts ["-m" "com.robotfund"]}
+  :build {:deps {io.github.clojure/tools.build {:mvn/version "0.10.7"}}
+          :ns-default build}}}

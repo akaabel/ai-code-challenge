@@ -66,11 +66,21 @@
        (map #(or (parse-d (:market_value %)) 0.0))
        (reduce + 0.0)))
 
-(defn- evaluate [analysis account positions trades-today settings]
+(defn- pending-buy-value
+  "Estimated cost of open (unfilled) buy orders for ticker.
+   Uses qty * price because market orders have no limit_price."
+  [open-orders ticker price]
+  (->> open-orders
+       (filter #(and (= (:symbol %) ticker) (= (:side %) "buy")))
+       (map #(* (Long/parseLong (str (or (:qty %) 0))) price))
+       (reduce + 0.0)))
+
+(defn- evaluate [analysis account positions open-orders trades-today settings]
   (let [ticker      (:analysis/ticker analysis)
         rating      (:analysis/rating analysis)
         action      (:analysis/action analysis)
         equity      (parse-d (:equity account))
+        cash        (parse-d (:cash account))
         pos         (position-for positions ticker)
         max-daily   (:settings/max-trades-per-day settings)
         daily-limit (:settings/max-trades-enabled settings)]
@@ -84,28 +94,45 @@
       (and (= action :buy) daily-limit (>= trades-today max-daily))
       {:decision :rejected :reason (str "daily trade limit of " max-daily " reached")}
 
+      ;; Hard cash floor — never go into margin
+      (and (= action :buy) (<= cash 0.0))
+      {:decision :rejected :reason (str "cash ≤ $0 (current: $" (format "%.0f" cash) ") — no funds for new buys")}
+
       (= action :buy)
       (let [price         (latest-price ticker)
+            ;; Include unfilled open orders so we don't double-commit capital
+            filled-value  (or (parse-d (:market_value pos)) 0.0)
+            pending-value (pending-buy-value open-orders ticker price)
+            current-value (+ filled-value pending-value)
             max-value     (* equity max-position-pct)
-            current-value (or (parse-d (:market_value pos)) 0.0)
             remaining     (- max-value current-value)
             raw-qty       (long (Math/floor (/ remaining price)))
             sector        (get sector-map ticker :other)
             sec-room      (- (* equity max-sector-pct) (sector-exposure positions sector))
             sec-qty       (long (Math/floor (/ sec-room price)))
-            final-qty     (min raw-qty sec-qty)]
+            ;; Never spend more than available cash
+            cash-qty      (long (Math/floor (/ (max 0.0 cash) price)))
+            final-qty     (min raw-qty sec-qty cash-qty)]
         (cond
           (<= remaining 0.0)
           {:decision :rejected
-           :reason (str "position at maximum " (int (* 100 max-position-pct)) "% of equity")}
+           :reason (str "position at maximum " (int (* 100 max-position-pct)) "% of equity"
+                        (when (pos? pending-value)
+                          (str " (incl. $" (format "%.0f" pending-value) " pending)"))}
 
           (<= final-qty 0)
           {:decision :rejected
-           :reason (str "sector " (name sector) " at or near " (int (* 100 max-sector-pct)) "% cap")}
+           :reason (if (zero? cash-qty)
+                     (str "cash $" (format "%.0f" cash) " < one share at $" (format "%.2f" price))
+                     (str "sector " (name sector) " at or near " (int (* 100 max-sector-pct)) "% cap"))}
 
           (< final-qty raw-qty)
           {:decision :resized :quantity (int final-qty)
-           :reason (str "resized " raw-qty "→" final-qty " shares; sector exposure cap")}
+           :reason (str "resized " raw-qty "→" final-qty " shares; "
+                        (cond
+                          (= final-qty cash-qty) (str "cash limit ($" (format "%.0f" cash) ")")
+                          (= final-qty sec-qty)  "sector exposure cap"
+                          :else                  "multiple caps"))}
 
           :else
           {:decision :approved :quantity (int final-qty)
@@ -127,10 +154,10 @@
       :else
       {:decision :rejected :reason "unrecognised action"})))
 
-(defn- process-analysis [ctx analysis account positions trades-today-atom settings]
+(defn- process-analysis [ctx analysis account positions open-orders trades-today-atom settings]
   (let [ticker   (:analysis/ticker analysis)
         action   (:analysis/action analysis)
-        ruling   (evaluate analysis account positions @trades-today-atom settings)
+        ruling   (evaluate analysis account positions open-orders @trades-today-atom settings)
         proposal (cond-> {:xt/id                     (random-uuid)
                           :trade-proposal/analysis-id (:xt/id analysis)
                           :trade-proposal/ticker      ticker
@@ -161,15 +188,17 @@
         analyses     (unproposed-analyses db)
         account      (alpaca/get-account)
         positions    (alpaca/get-positions)
+        open-orders  (alpaca/get-open-orders)
         trades-today (atom (todays-approved-count db))]
-    (println (str "Risk: max-trades-per-day "
+    (println (str "Risk: cash=$" (format "%.0f" (Double/parseDouble (str (:cash account))))
+                  "  max-trades-per-day "
                   (if (:settings/max-trades-enabled settings)
                     (str "ENABLED (" (:settings/max-trades-per-day settings) ")")
                     "DISABLED")))
     (reduce
      (fn [total analysis]
        (try
-         (process-analysis ctx analysis account positions trades-today settings)
+         (process-analysis ctx analysis account positions open-orders trades-today settings)
          (inc total)
          (catch Exception e
            (println (str "Risk error [" (:analysis/ticker analysis) "]: " (.getMessage e)))
