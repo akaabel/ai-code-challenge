@@ -280,9 +280,11 @@
 
 (defn- event-detail [e]
   (case (:event/type e)
-    :candidate (if (= :price-change (:candidate/trigger e))
-                 (format "price %+.1f%%" (* 100 (or (:candidate/price-change-pct e) 0.0)))
-                 (format "volume %.1f×"  (or (:candidate/volume-ratio e) 0.0)))
+    :candidate (case (:candidate/trigger e)
+                 :price-change (format "price %+.1f%%" (* 100 (or (:candidate/price-change-pct e) 0.0)))
+                 :volume-spike (format "volume %.1f×"  (or (:candidate/volume-ratio e) 0.0))
+                 :held         "held position — reviewed for sell"
+                 "unknown trigger")
     :news      (str (format "sentiment %+.2f" (double (or (:news-report/sentiment e) 0)))
                     " — " (truncate (:news-report/summary e) 80))
     :analysis  (str "rating " (:analysis/rating e) "/10 → " (name (or (:analysis/action e) :hold)))
@@ -384,9 +386,11 @@
     (event-badge :candidate)
     [:span.font-semibold (str "1. Scanner — " (:candidate/ticker c))]]
    [:div.text-sm.text-gray-700
-    (if (= :price-change (:candidate/trigger c))
-      (str "Price change: " (format "%+.1f%%" (* 100 (or (:candidate/price-change-pct c) 0.0))))
-      (str "Volume spike: " (format "%.1f×" (or (:candidate/volume-ratio c) 0.0))))
+    (case (:candidate/trigger c)
+      :price-change (str "Price change: " (format "%+.1f%%" (* 100 (or (:candidate/price-change-pct c) 0.0))))
+      :volume-spike (str "Volume spike: " (format "%.1f×" (or (:candidate/volume-ratio c) 0.0)))
+      :held         "Held position — reviewed for sell"
+      "Unknown trigger")
     [:span.text-gray-400.ml-2 (fmt-time (:candidate/scanned-at c))]]))
 
 (defn- news-card [n llm]

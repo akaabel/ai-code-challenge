@@ -35,7 +35,7 @@
 
    ;; Scanner
    :candidate/id      :uuid
-   :candidate/trigger [:enum :price-change :volume-spike]
+   :candidate/trigger [:enum :price-change :volume-spike :held]
 
    :candidate [:map {:closed true}
                [:xt/id                                    :candidate/id]

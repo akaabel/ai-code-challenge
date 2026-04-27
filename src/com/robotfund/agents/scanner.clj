@@ -33,7 +33,7 @@
       (println (str "Scanner: screener unavailable (" (.getMessage e) ") — using fallback watchlist"))
       fallback-watchlist)))
 
-(defn- candidates-for [ticker bars]
+(defn- candidates-for [ticker bars held?]
   (when (>= (count bars) 2)
     (let [now        (java.util.Date.)
           last-bar   (last bars)
@@ -51,28 +51,36 @@
       (when (>= last-close min-price)
         (let [price-trigger? (and pct-chg (> (Math/abs pct-chg) price-change-threshold))
               vol-trigger?   (and vol-ratio (> vol-ratio volume-spike-ratio))]
-          (when (or price-trigger? vol-trigger?)
+          (when (or price-trigger? vol-trigger? held?)
             [(cond-> {:xt/id                (random-uuid)
                       :candidate/ticker      ticker
                       :candidate/scanned-at  now
-                      :candidate/trigger     (if price-trigger? :price-change :volume-spike)}
+                      :candidate/trigger     (cond price-trigger? :price-change
+                                                   vol-trigger?   :volume-spike
+                                                   :else          :held)}
                price-trigger? (assoc :candidate/price-change-pct pct-chg)
                vol-trigger?   (assoc :candidate/volume-ratio vol-ratio))]))))))
 
 (defn run-scanner
-  "Discovers tickers dynamically via Alpaca's movers + most-actives screener endpoints,
-   then checks each for price-change (>1.5%) and volume-spike (>2× 20-day avg) triggers.
+  "Discovers tickers via Alpaca screener (movers + most-actives) and always includes
+   currently-held positions so they are evaluated for selling every cycle.
+   Held tickers that don't meet price/volume thresholds get a :held trigger.
    Writes at most one :candidate per ticker per cycle. Returns total count saved."
   [ctx]
-  (let [node    (:biff.xtdb/node ctx)
-        tickers (discover-tickers)]
-    (println (str "Scanner: checking " (count tickers) " tickers from screener"))
+  (let [node         (:biff.xtdb/node ctx)
+        screener     (discover-tickers)
+        positions    (try (alpaca/get-positions) (catch Exception _ []))
+        held-set     (set (map :symbol positions))
+        all-tickers  (take max-tickers (distinct (concat screener held-set)))]
+    (println (str "Scanner: checking " (count all-tickers) " tickers"
+                  " (" (count screener) " screener + " (count held-set) " held)"))
     (reduce
      (fn [total ticker]
        (try
          (let [resp       (alpaca/get-bars ticker {:limit 30})
                bars       (sort-by :t (:bars resp))
-               candidates (candidates-for ticker bars)]
+               held?      (contains? held-set ticker)
+               candidates (candidates-for ticker bars held?)]
            (if (seq candidates)
              (do
                (doseq [c candidates] (schema/validate! :candidate c))
@@ -82,14 +90,15 @@
                                (when (:candidate/price-change-pct c)
                                  (format " price=%+.2f%%" (:candidate/price-change-pct c)))
                                (when (:candidate/volume-ratio c)
-                                 (format " vol=%.1f×" (:candidate/volume-ratio c))))))
+                                 (format " vol=%.1f×" (:candidate/volume-ratio c)))
+                               (when (= :held (:candidate/trigger c)) " [held]"))))
                (inc total))
              total))
        (catch Exception e
          (println (str "Scanner error [" ticker "]: " (.getMessage e)))
          total)))
      0
-     tickers)))
+     all-tickers)))
 
 (comment
   (require '[repl :refer [get-context]])
