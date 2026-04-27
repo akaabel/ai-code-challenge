@@ -78,7 +78,7 @@ The Risk Manager is pure logic — no LLM. It applies a fixed set of rules and e
 | Minimum rating to buy | 7 / 10 | Only act on high-conviction signals |
 | Maximum position size | 10% of equity | No single stock dominates the portfolio |
 | Maximum sector exposure | 30% of equity | Sector diversification |
-| Maximum buys per day | 5 | Limit churn; see note below |
+| Maximum buys per day | configurable (default 5, can be disabled) | Limit churn; see note below |
 
 **Sell conditions (all must pass):**
 
@@ -95,9 +95,11 @@ The Risk Manager is pure logic — no LLM. It applies a fixed set of rules and e
 
 ### The 5-buys-per-day limit
 
-This is a global cap across all tickers, not per ticker. Sells are not counted against it. The limit was chosen to keep the system conservative and to partially compensate for a known gap described below (see *Known limitations*). It can be changed by editing one line in `risk.clj` (`max-trades-per-day`).
+This is a global cap across all tickers, not per ticker. Sells are not counted against it. The limit was chosen to keep the system conservative and to partially compensate for a known gap described below (see *Known limitations*).
 
-With 26 cycles per trading day, the fund will typically hit this limit early (within the first two hours) and make no further buys for the rest of the day. If you want more activity, raise the number or remove the cap and rely solely on the position/sector caps.
+The cap is configurable from the **portfolio page settings widget** — no code change needed. You can raise or lower the number, or toggle the limit off entirely to rely solely on the position and sector caps.
+
+With 26 cycles per trading day, the fund will typically hit this limit early (within the first two hours) and make no further buys for the rest of the day. If you want more activity, raise the number or disable the cap from the settings widget.
 
 ---
 
