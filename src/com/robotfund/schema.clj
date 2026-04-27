@@ -75,7 +75,7 @@
 
    ;; Risk manager
    :trade-proposal/id       :uuid
-   :trade-proposal/decision [:enum :approved :rejected :resized]
+   :trade-proposal/decision [:enum :approved :rejected :resized :failed]
 
    :trade-proposal [:map {:closed true}
                     [:xt/id                                    :trade-proposal/id]

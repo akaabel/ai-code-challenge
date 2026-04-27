@@ -81,6 +81,14 @@
           (println (str "Executor: reconcile error [" (:order/ticker order) "]: "
                         (.getMessage e))))))))
 
+(defn- fail-proposal! [ctx proposal reason]
+  (xt/await-tx (:biff.xtdb/node ctx)
+               (xt/submit-tx (:biff.xtdb/node ctx)
+                             [[::xt/put (assoc proposal
+                                              :trade-proposal/decision :failed
+                                              :trade-proposal/reason   reason)]]))
+  (println (str "Executor: proposal failed [" (:trade-proposal/ticker proposal) "]: " reason)))
+
 (defn- execute-proposal! [ctx proposal]
   (let [ticker     (:trade-proposal/ticker proposal)
         action     (:trade-proposal/action proposal)
@@ -118,8 +126,9 @@
          (execute-proposal! ctx proposal)
          (inc total)
          (catch Exception e
-           (println (str "Executor: order error [" (:trade-proposal/ticker proposal) "]: "
-                         (.getMessage e)))
+           (let [msg (str "order rejected by Alpaca: " (.getMessage e))]
+             (println (str "Executor: order error [" (:trade-proposal/ticker proposal) "]: " msg))
+             (fail-proposal! ctx proposal msg))
            total)))
      0
      proposals)))
