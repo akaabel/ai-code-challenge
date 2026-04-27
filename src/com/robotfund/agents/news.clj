@@ -83,8 +83,7 @@
      candidates)))
 
 (comment
-  (require '[repl :refer [get-context]]
-           '[xtdb.api :as xt])
+  (require '[repl :refer [get-context]])
 
   (def ctx (get-context))
 
@@ -97,7 +96,7 @@
           :where [[r :news-report/ticker]]})
 
   ;; Full chain for one ticker: candidate → news-report → llm-call
-  (let [db (:biff/db ctx)]
+  (let [_db (:biff/db ctx)]
     (xt/q (xt/db (:biff.xtdb/node ctx))
           '{:find  [(pull c [:candidate/ticker :candidate/trigger])
                     (pull r [:news-report/sentiment :news-report/summary])

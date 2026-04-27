@@ -36,7 +36,7 @@
 
 (def static-pages (apply biff/safe-merge (map :static modules)))
 
-(defn generate-assets! [ctx]
+(defn generate-assets! [_ctx]
   (biff/export-rum static-pages "target/resources/public")
   (biff/delete-old-files {:dir "target/resources/public"
                           :exts [".html"]}))

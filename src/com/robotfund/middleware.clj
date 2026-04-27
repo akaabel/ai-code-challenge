@@ -25,10 +25,10 @@
     (let [response (handler ctx)]
       (println "REQUEST")
       (biff/pprint ctx)
-      (def ctx* ctx)
+      #_{:clj-kondo/ignore [:inline-def]} (def ctx* ctx)
       (println "RESPONSE")
       (biff/pprint response)
-      (def response* response)
+      #_{:clj-kondo/ignore [:inline-def]} (def response* response)
       response)))
 
 (defn wrap-site-defaults [handler]

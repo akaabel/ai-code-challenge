@@ -134,8 +134,7 @@
      proposals)))
 
 (comment
-  (require '[repl :refer [get-context]]
-           '[xtdb.api :as xt])
+  (require '[repl :refer [get-context]])
 
   (def ctx (get-context))
 

@@ -128,7 +128,7 @@
                              (swap! chat-clients conj ws))
                   :on-message (fn [ws text-message]
                                 (send-message ctx {:ws ws :text text-message}))
-                  :on-close (fn [ws status-code reason]
+                  :on-close (fn [ws _status-code _reason]
                               (swap! chat-clients disj ws))}})
 
 (def about-page

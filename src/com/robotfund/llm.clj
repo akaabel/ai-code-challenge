@@ -54,8 +54,7 @@
 
 (comment
   (require '[com.robotfund :as app]
-           '[com.robotfund.llm :as llm]
-           '[xtdb.api :as xt])
+           '[com.robotfund.llm :as llm])
 
   (def ctx @app/system)
 
