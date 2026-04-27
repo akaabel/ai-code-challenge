@@ -131,14 +131,23 @@
   (let [db      (xt/db (:biff.xtdb/node ctx))
         orphans (orphaned-filled-orders db)]
     (when (seq orphans)
-      (println (str "Executor: recovering fills for " (count orphans) " orphaned order(s)")))
-    (doseq [order orphans]
+      (println (str "Executor: recovering fills for " (count orphans) " orphaned order(s)"))
       (try
-        (let [alpaca-resp (alpaca/get-order (:order/alpaca-id order))]
-          (write-fill! ctx order alpaca-resp))
+        (let [activities  (alpaca/get-fill-activities)
+              by-order-id (group-by :order_id activities)]
+          (doseq [order orphans]
+            (let [acts (get by-order-id (:order/alpaca-id order))]
+              (if (seq acts)
+                (let [act  (first acts)
+                      resp {:filled_qty       (:qty act)
+                            :filled_avg_price (:price act)}]
+                  (println (str "Executor: orphan recovery [" (:order/ticker order)
+                                "] activity qty=" (:qty act) " price=" (:price act)))
+                  (write-fill! ctx order resp))
+                (println (str "Executor: no activity found for orphaned order ["
+                              (:order/ticker order) "] alpaca-id=" (:order/alpaca-id order)))))))
         (catch Exception e
-          (println (str "Executor: orphan recovery error [" (:order/ticker order) "]: "
-                        (.getMessage e))))))))
+          (println (str "Executor: orphan recovery error: " (.getMessage e))))))))
 
 (defn run-executor
   "Reconciles any pending orders, cancels stale ones, recovers orphaned fills,

@@ -70,6 +70,12 @@
   []
   (get* trading-url "/orders" {:status "open"}))
 
+(defn get-fill-activities
+  "Returns all FILL activity records for the account.
+   Each record has :order_id, :symbol, :side, :qty, :price, :transaction_time."
+  []
+  (get* trading-url "/account/activities/FILL" {}))
+
 (defn get-movers
   "Returns top gainers and losers for US equities.
    opts: :top (default 20, max 25).
