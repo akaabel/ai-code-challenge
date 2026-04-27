@@ -32,20 +32,28 @@
     "expired"    :expired
     :pending))
 
+(defn- parse-double* [v]
+  (when v (try (Double/parseDouble (str v)) (catch Exception _ nil))))
+
 (defn- write-fill! [ctx order alpaca-resp]
-  (let [qty-filled (long (Double/parseDouble (str (:filled_qty alpaca-resp))))
-        price      (Double/parseDouble (str (:filled_avg_price alpaca-resp)))
-        fill       {:xt/id          (random-uuid)
-                    :fill/order-id  (:xt/id order)
-                    :fill/ticker    (:order/ticker order)
-                    :fill/quantity  (int qty-filled)
-                    :fill/price     price
-                    :fill/filled-at (java.util.Date.)}]
-    (schema/validate! :fill fill)
-    (xt/submit-tx (:biff.xtdb/node ctx) [[::xt/put fill]])
-    (println (str "Executor: fill " (:order/ticker order)
-                  " " (name (:order/side order))
-                  " " qty-filled " @ $" (format "%.2f" price)))))
+  (let [qty-filled (some-> (parse-double* (:filled_qty alpaca-resp)) long)
+        price      (parse-double* (:filled_avg_price alpaca-resp))]
+    (if (or (nil? qty-filled) (nil? price) (zero? qty-filled))
+      (println (str "Executor: fill data incomplete for " (:order/ticker order)
+                    " — will retry next cycle"
+                    " (qty=" (:filled_qty alpaca-resp)
+                    " price=" (:filled_avg_price alpaca-resp) ")"))
+      (let [fill {:xt/id          (random-uuid)
+                  :fill/order-id  (:xt/id order)
+                  :fill/ticker    (:order/ticker order)
+                  :fill/quantity  (int qty-filled)
+                  :fill/price     price
+                  :fill/filled-at (java.util.Date.)}]
+        (schema/validate! :fill fill)
+        (xt/submit-tx (:biff.xtdb/node ctx) [[::xt/put fill]])
+        (println (str "Executor: fill " (:order/ticker order)
+                      " " (name (:order/side order))
+                      " " qty-filled " @ $" (format "%.2f" price)))))))
 
 (defn- update-order-status! [ctx order new-status]
   (xt/submit-tx (:biff.xtdb/node ctx)
@@ -112,12 +120,33 @@
     (reconcile-order! ctx order)
     order))
 
+(defn- orphaned-filled-orders [db]
+  (let [filled-order-ids (set (map first (xt/q db '{:find [o]
+                                                    :where [[_ :fill/order-id o]]})))]
+    (->> (map first (xt/q db '{:find  [(pull o [*])]
+                               :where [[o :order/status :filled]]}))
+         (remove #(filled-order-ids (:xt/id %))))))
+
+(defn- recover-orphaned-fills! [ctx]
+  (let [db      (xt/db (:biff.xtdb/node ctx))
+        orphans (orphaned-filled-orders db)]
+    (when (seq orphans)
+      (println (str "Executor: recovering fills for " (count orphans) " orphaned order(s)")))
+    (doseq [order orphans]
+      (try
+        (let [alpaca-resp (alpaca/get-order (:order/alpaca-id order))]
+          (write-fill! ctx order alpaca-resp))
+        (catch Exception e
+          (println (str "Executor: orphan recovery error [" (:order/ticker order) "]: "
+                        (.getMessage e))))))))
+
 (defn run-executor
-  "Reconciles any pending orders, cancels stale ones, then executes all
-   unexecuted approved/resized :trade-proposals via Alpaca market orders.
-   Writes :order and :fill to XTDB. Returns count of orders placed."
+  "Reconciles any pending orders, cancels stale ones, recovers orphaned fills,
+   then executes all unexecuted approved/resized :trade-proposals via Alpaca
+   market orders. Writes :order and :fill to XTDB. Returns count of orders placed."
   [ctx]
   (reconcile-pending! ctx)
+  (recover-orphaned-fills! ctx)
   (let [db        (xt/db (:biff.xtdb/node ctx))
         proposals (unexecuted-proposals db)]
     (reduce
