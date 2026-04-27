@@ -118,7 +118,7 @@
           {:decision :rejected
            :reason (str "position at maximum " (int (* 100 max-position-pct)) "% of equity"
                         (when (pos? pending-value)
-                          (str " (incl. $" (format "%.0f" pending-value) " pending)"))}
+                          (str " (incl. $" (format "%.0f" pending-value) " pending)")))}
 
           (<= final-qty 0)
           {:decision :rejected
