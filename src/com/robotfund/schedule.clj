@@ -5,7 +5,8 @@
             [com.robotfund.agents.news :as news]
             [com.robotfund.agents.analyst :as analyst]
             [com.robotfund.agents.risk :as risk]
-            [com.robotfund.agents.executor :as executor])
+            [com.robotfund.agents.executor :as executor]
+            [xtdb.api :as xt])
   (:import (java.time ZoneId LocalTime DayOfWeek LocalDate)
            (java.util Date)))
 
@@ -42,11 +43,31 @@
                 (biff/add-seconds (Date.) (* 60 offset-minutes)))
        (filter market-hours?)))
 
-(defn- scanner-task  [ctx] (log/info "scheduler/scanner:"  (scanner/run-scanner ctx)   "candidates"))
-(defn- news-task     [ctx] (log/info "scheduler/news:"     (news/run-news-agent ctx)   "reports"))
-(defn- analyst-task  [ctx] (log/info "scheduler/analyst:"  (analyst/run-analyst ctx)   "analyses"))
-(defn- risk-task     [ctx] (log/info "scheduler/risk:"     (risk/run-risk ctx)         "proposals"))
-(defn- executor-task [ctx] (log/info "scheduler/executor:" (executor/run-executor ctx) "orders"))
+(defn- log-run! [ctx agent-name]
+  (xt/submit-tx (:biff.xtdb/node ctx)
+                [[::xt/put {:xt/id          (keyword "agent-run" agent-name)
+                             :agent-run/name agent-name
+                             :agent-run/ran-at (Date.)}]]))
+
+(defn- scanner-task [ctx]
+  (log-run! ctx "scanner")
+  (log/info "scheduler/scanner:" (scanner/run-scanner ctx) "candidates"))
+
+(defn- news-task [ctx]
+  (log-run! ctx "news")
+  (log/info "scheduler/news:" (news/run-news-agent ctx) "reports"))
+
+(defn- analyst-task [ctx]
+  (log-run! ctx "analyst")
+  (log/info "scheduler/analyst:" (analyst/run-analyst ctx) "analyses"))
+
+(defn- risk-task [ctx]
+  (log-run! ctx "risk")
+  (log/info "scheduler/risk:" (risk/run-risk ctx) "proposals"))
+
+(defn- executor-task [ctx]
+  (log-run! ctx "executor")
+  (log/info "scheduler/executor:" (executor/run-executor ctx) "orders"))
 
 (def module
   {:tasks [{:task #'scanner-task  :schedule #(agent-schedule 0)}

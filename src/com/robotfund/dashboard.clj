@@ -6,6 +6,7 @@
             [com.biffweb :as biff :refer [q]]
             [com.robotfund.alpaca :as alpaca]
             [com.robotfund.agents.risk :as risk]
+            [com.robotfund.schedule :as schedule]
             [com.robotfund.schema :as schema]
             [com.robotfund.ui :as ui]
             [rum.core :as rum]
@@ -15,11 +16,36 @@
 
 ;; --- Formatting helpers ---
 
-(def ^:private et-zone (ZoneId/of "America/New_York"))
-(def ^:private ts-fmt  (DateTimeFormatter/ofPattern "MMM d HH:mm:ss"))
+(def ^:private et-zone   (ZoneId/of "America/New_York"))
+(def ^:private oslo-zone (ZoneId/of "Europe/Oslo"))
+(def ^:private ts-fmt    (DateTimeFormatter/ofPattern "MMM d HH:mm:ss"))
+(def ^:private dt-fmt    (DateTimeFormatter/ofPattern "MMM d HH:mm"))
 
 (defn- fmt-time [^java.util.Date d]
   (when d (-> d .toInstant (.atZone et-zone) (.format ts-fmt))))
+
+(defn- fmt-et   [^java.util.Date d] (when d (-> d .toInstant (.atZone et-zone)   (.format dt-fmt))))
+(defn- fmt-oslo [^java.util.Date d] (when d (-> d .toInstant (.atZone oslo-zone) (.format dt-fmt))))
+
+(defn- next-agent-fire
+  "Next market-hours fire time: last-ran + 15 min (or now if that's in the past)."
+  [last-ran]
+  (let [now   (java.util.Date.)
+        start (if last-ran
+                (let [c (biff/add-seconds last-ran (* 15 60))]
+                  (if (.before c now) now c))
+                now)]
+    (first (filter schedule/market-hours?
+                   (iterate #(biff/add-seconds % (* 15 60)) start)))))
+
+(defn- time-until [^java.util.Date d]
+  (let [delta (- (.getTime d) (System/currentTimeMillis))
+        mins  (int (Math/floor (/ delta 60000)))]
+    (cond
+      (neg? delta) "overdue"
+      (< mins 1)   "< 1 min"
+      (< mins 60)  (str mins " min")
+      :else        (str (int (/ mins 60)) "h " (mod mins 60) "m"))))
 
 (defn- parse-d [s] (when s (Double/parseDouble (str s))))
 
@@ -95,6 +121,73 @@
          [:td.py-2.pr-6.text-right {:class cls} (fmt-signed pl)]
          [:td.py-2.text-right {:class cls} (fmt-pct plpc)]])]]))
 
+;; --- Agent schedule widget ---
+
+(defn- schedule-row [agent-name last-ran]
+  (let [now       (java.util.Date.)
+        next-fire (next-agent-fire last-ran)
+        market?   (schedule/market-hours? now)
+        overdue?  (and market? (.before next-fire now))
+        dot       (cond overdue? "bg-red-500"
+                        market?  "bg-green-500"
+                        :else    "bg-gray-400")]
+    [:tr.border-b.border-gray-100
+     [:td.py-2.pr-3
+      [:span.inline-block.w-2.h-2.rounded-full {:class dot}]]
+     [:td.py-2.pr-6.text-sm.font-medium agent-name]
+     [:td.py-2.pr-8.text-xs.text-gray-500
+      (if last-ran
+        [:<>
+         [:div (fmt-oslo last-ran) " CET"]
+         [:div.text-gray-400 (fmt-et last-ran) " ET"]]
+        [:span.text-gray-300 "never"])]
+     [:td.py-2.text-xs.text-gray-500
+      [:<>
+       [:div (fmt-oslo next-fire) " CET"]
+       [:div.text-gray-400 (fmt-et next-fire) " ET"]
+       [:div.font-medium.mt-0.5
+        {:class (if overdue? "text-red-500" "text-blue-400")}
+        (time-until next-fire)]]]]))
+
+(defn- agent-last-ran [db agent-name]
+  (:agent-run/ran-at (xt/entity db (keyword "agent-run" agent-name))))
+
+(defn schedule-rows [{:keys [biff/db biff.xtdb/node] :as _ctx}]
+  (let [db (or db (xt/db node))
+        agents [["Scanner"  (agent-last-ran db "scanner")]
+                ["News"     (agent-last-ran db "news")]
+                ["Analyst"  (agent-last-ran db "analyst")]
+                ["Risk"     (agent-last-ran db "risk")]
+                ["Executor" (agent-last-ran db "executor")]]]
+    {:status  200
+     :headers {"content-type" "text/html; charset=utf-8"}
+     :body    (rum/render-static-markup
+               [:<> (map (fn [[n t]] (schedule-row n t)) agents)])}))
+
+(defn- schedule-widget [db]
+  (let [agents [["Scanner"  (agent-last-ran db "scanner")]
+                ["News"     (agent-last-ran db "news")]
+                ["Analyst"  (agent-last-ran db "analyst")]
+                ["Risk"     (agent-last-ran db "risk")]
+                ["Executor" (agent-last-ran db "executor")]]]
+    [:div.bg-white.rounded.border.border-gray-200.p-4
+     [:div.flex.items-center.justify-between.mb-3
+      [:div.text-xs.text-gray-500.uppercase.tracking-wide "Agent Schedule"]
+      [:span.text-xs.text-gray-400 "Refreshes every 10s"]]
+     [:table.w-full
+      [:thead
+       [:tr.text-left.text-xs.text-gray-400.uppercase.border-b.border-gray-200
+        [:th.py-1.pr-3]
+        [:th.py-1.pr-6 "Agent"]
+        [:th.py-1.pr-8 "Last Ran"]
+        [:th.py-1 "Next Fire"]]]
+      [:tbody
+       {:id "schedule-rows"
+        :hx-get "/schedule/rows"
+        :hx-trigger "load, every 10s"
+        :hx-swap "innerHTML"}
+       (map (fn [[n t]] (schedule-row n t)) agents)]]]))
+
 ;; --- Settings widget ---
 
 (defn- settings-widget [settings]
@@ -147,7 +240,6 @@
                          (log/warn "Dashboard: Alpaca positions error:" (.getMessage e))
                          []))
         settings  (risk/load-settings db)
-        last-scan (ffirst (xt/q db '{:find [(max t)] :where [[_ :candidate/scanned-at t]]}))
         equity    (parse-d (:equity account))
         cash      (parse-d (:cash account))
         last-eq   (parse-d (:last_equity account))
@@ -167,10 +259,8 @@
          [:h2.text-sm.font-semibold.text-gray-700.mb-2
           (str "Open Positions (" (count positions) ")")]
          (positions-table positions)]
-        [:div.mb-6
-         [:div.text-xs.text-gray-400.mb-3
-          "Last scan: " (or (fmt-time last-scan) "—")]
-         (settings-widget settings)]]))))
+        [:div.mb-6 (schedule-widget db)]
+        [:div.mb-6 (settings-widget settings)]]))))
 
 ;; --- Timeline ---
 
@@ -571,6 +661,7 @@
             ["/timeline"            {:get  timeline-page}]
             ["/timeline/rows"       {:get  timeline-rows}]
             ["/trade/:id"           {:get  trade-page}]
+            ["/schedule/rows"        {:get  schedule-rows}]
             ["/settings/max-trades" {:post save-max-trades}]
             ["/query"               {:get  query-page}]
             ["/query/run"           {:post run-query}]]})
